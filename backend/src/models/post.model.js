@@ -4,6 +4,7 @@ require('./auth.model');
 const postSchema = new mongoose.Schema({
     date: Date,
     venue: String,   
+    description: String,
     image: String,
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -39,11 +39,12 @@ async function createPost(req, res) {
         }
 
         const result = await uploadImage(req.file);
-        const { venue, date } = req.body;
+        const { venue, date, description } = req.body;
 
         const post = await postModel.create({
             image: result.url,
             venue,
+            description,
             date,
             createdBy: userId
         });

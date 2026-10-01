@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables
+.env
+.env.*
+.env.local
+.env.*.local
+*.env
+*/.env
+*/.env.*
+*/.env.local
+*/.env.*.local
+!.env.example
+!*/.env.example
+
+# Build outputs & logs
+dist/
+*/dist/
+*.log
+*/logs/
+.DS_Store
