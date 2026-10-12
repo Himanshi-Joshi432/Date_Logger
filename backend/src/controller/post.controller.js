@@ -32,20 +32,40 @@ async function createPost(req, res) {
     }
 
     try {
-        if (!req.file) {
+        const imageFile = req.files?.image?.[0] || req.file;
+        const audioFile = req.files?.audio?.[0] || req.files?.music?.[0];
+
+        if (!imageFile) {
             return res.status(400).json({
                 message: "Image is required"
             });
         }
 
-        const result = await uploadImage(req.file);
+        const imageResult = await uploadImage(imageFile);
         const { venue, date, description } = req.body;
 
+        let music = undefined;
+        if (audioFile) {
+            const audioResult = await uploadImage(audioFile);
+            music = {
+                audioUrl: audioResult.url,
+                startTime: Number(req.body.startTime) || 0,
+                duration: Number(req.body.duration ?? req.body.Duration) || 30
+            };
+        } else if (req.body.audioUrl) {
+            music = {
+                audioUrl: req.body.audioUrl.trim(),
+                startTime: Number(req.body.startTime) || 0,
+                duration: Number(req.body.duration ?? req.body.Duration) || 30
+            };
+        }
+
         const post = await postModel.create({
-            image: result.url,
+            image: imageResult.url,
             venue,
             description,
             date,
+            music,
             createdBy: userId
         });
 
@@ -58,7 +78,7 @@ async function createPost(req, res) {
     } catch (error) {
         console.error("Error creating post:", error);
         return res.status(500).json({
-            message: "Error uploading image or creating post",
+            message: "Error uploading image/audio or creating post",
             error: error.message
         });
     }

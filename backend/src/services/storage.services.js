@@ -10,18 +10,18 @@ const imageKit = new ImageKit({
     privateKey: process.env.IMAGEKIT_PRIVATE_KEY
 });
 
-// Configure multer memory storage for handling multipart form uploads
+// Configure multer memory storage for handling multipart form uploads (images & audio)
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB file limit
+        fileSize: 25 * 1024 * 1024 // 25MB file limit (supports both images and audio files)
     }
 });
 
 /**
- * Uploads an image to ImageKit.
+ * Uploads an image or audio file to ImageKit.
  * Supports:
- * - Multer file object (req.file)
+ * - Multer file object (req.file / req.files)
  * - Raw Buffer
  * - Base64 string / URL
  *
@@ -38,11 +38,12 @@ async function uploadImage(fileData, customFileName) {
     let fileName = customFileName;
 
     if (Buffer.isBuffer(fileData)) {
-        fileName = (fileName || `image_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
+        fileName = (fileName || `file_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
         filePayload = await toFile(fileData, fileName);
     } else if (fileData && fileData.buffer) {
-        // Multer file object (req.file)
-        fileName = (fileName || fileData.originalname || `image_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
+        // Multer file object
+        const defaultExt = fileData.mimetype?.startsWith('audio/') ? 'mp3' : 'jpg';
+        fileName = (fileName || fileData.originalname || `file_${Date.now()}.${defaultExt}`).replace(/[^a-zA-Z0-9.-]/g, '_');
         filePayload = await toFile(
             fileData.buffer,
             fileName,
@@ -50,7 +51,7 @@ async function uploadImage(fileData, customFileName) {
         );
     } else if (typeof fileData === 'string') {
         // Base64 string or remote URL
-        fileName = (fileName || `image_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
+        fileName = (fileName || `file_${Date.now()}.jpg`).replace(/[^a-zA-Z0-9.-]/g, '_');
         filePayload = fileData;
     } else {
         throw new Error('Unsupported file format provided to uploadImage');
@@ -66,5 +67,7 @@ async function uploadImage(fileData, customFileName) {
 
 module.exports = uploadImage;
 module.exports.uploadImage = uploadImage;
+module.exports.uploadFile = uploadImage;
 module.exports.upload = upload;
 module.exports.imageKit = imageKit;
+
