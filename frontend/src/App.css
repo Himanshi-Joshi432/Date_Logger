@@ -1,37 +1,64 @@
 /* ==========================================================================
    Date Logger App Styles
-   Theme: Refined Romantic Rose Pink and White (Solid Colors Only - No Gradients)
-   Design: Curvey, Minimal, Mobile-First
+   Theme: Vintage Scrapbook & Memory Journal
+   Inspired by: Vintage collage, kraft paper, torn deckle edges, paperclips,
+   washi tape, dried botanicals, and staggered memory index cards.
    ========================================================================== */
 
 :root {
-  --color-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-subtle: #fff1f2; /* Rose 50 - soft warm blush */
-  --color-surface-hover: #ffe4e6;  /* Rose 100 */
-  --color-border-subtle: #fecdd3;  /* Rose 200 */
-  --color-border-active: #fda4af;  /* Rose 300 */
-  --color-primary: #e11d48;        /* Rose 600 - rich vibrant rose pink */
-  --color-primary-hover: #be123c;  /* Rose 700 */
-  --color-primary-active: #9f1239; /* Rose 800 */
-  --color-text-dark: #1e293b;
-  --color-text-medium: #475569;
-  --color-text-subtle: #64748b;
-  --color-text-pink: #9f1239;
-  --color-danger: #dc2626;
-  --color-danger-bg: #fef2f2;
-  --color-danger-border: #fca5a5;
-  --color-success: #059669;
-  --color-success-bg: #fff1f2;
-  --color-success-border: #fda4af;
+  /* Vintage Scrapbook Color Palette */
+  --color-bg: #ece3d4;               /* Aged parchment desk background */
+  --color-canvas-bg: #f5ede1;        /* Warm journal page base */
+  --color-surface: #ffffff;          /* Crisp white card surface (from Image 3 wireframe) */
+  --color-surface-subtle: #faf5ec;   /* Warm ivory handmade paper */
+  --color-surface-hover: #f3ebd8;    /* Warm beige hover */
+  --color-border-subtle: #d6c6b2;    /* Aged paper border */
+  --color-border-active: #b89f84;    /* Kraft paper border */
+  --color-card-border: #2a221b;      /* Crisp dark ink card border (from Image 3 wireframe) */
 
-  /* Curvey border-radius tokens */
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
+  /* Vintage Romantic Accents */
+  --color-primary: #8d3d2f;          /* Deep terracotta / vintage wax seal burgundy */
+  --color-primary-hover: #752f23;
+  --color-primary-active: #5e241a;
+  --color-primary-light: #fbeee9;
+
+  --color-kraft-paper: #d8be9b;      /* Kraft cardboard */
+  --color-antique-brass: #bda27e;    /* Vintage paperclip brass */
+  --color-washi-tape: rgba(246, 238, 222, 0.88); /* Washi tape translucent */
+
+  /* Vintage Ink Typography */
+  --color-text-dark: #261f18;        /* Vintage deep sepia ink */
+  --color-text-medium: #524436;      /* Muted sepia ink */
+  --color-text-subtle: #7a6a5b;      /* Aged book text */
+  --color-text-pink: #8d3d2f;        /* Terracotta accent */
+
+  /* Status Colors (Vintage Muted) */
+  --color-danger: #9c2e24;
+  --color-danger-bg: #fbf0ee;
+  --color-danger-border: #ebbdb8;
+  --color-success: #376342;
+  --color-success-bg: #f2f7f3;
+  --color-success-border: #b7d6be;
+
+  /* Typography Families */
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-handwriting: 'Caveat', 'Homemade Apple', cursive;
+  --font-typewriter: 'Courier Prime', Courier, monospace;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+
+  /* Border Radii */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-pill: 9999px;
-  --tap-target-min: 48px;
+
+  /* Shadows */
+  --shadow-paper: 0 2px 8px rgba(44, 36, 29, 0.08), 0 1px 3px rgba(44, 36, 29, 0.06);
+  --shadow-card: 0 4px 16px rgba(44, 36, 29, 0.12), 0 2px 6px rgba(44, 36, 29, 0.08);
+  --shadow-stagger: 3px 5px 14px rgba(42, 34, 27, 0.16), 0 1px 3px rgba(42, 34, 27, 0.1);
+  --shadow-float: 0 10px 30px rgba(44, 36, 29, 0.2), 0 2px 8px rgba(44, 36, 29, 0.1);
 }
 
 /* ==========================================================================
@@ -44,8 +71,11 @@
 
 body {
   background-color: var(--color-bg);
+  background-image: 
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.4) 0%, transparent 70%),
+    linear-gradient(to bottom, #eae0cf 0%, #ded0bb 100%);
   color: var(--color-text-dark);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   margin: 0;
@@ -58,27 +88,42 @@ body {
   flex-direction: column;
   background-color: var(--color-bg);
   overflow: hidden;
+  position: relative;
 }
 
 .main-content {
   flex: 1;
   width: 100%;
-  max-width: 520px; /* Mobile-first width */
+  max-width: 520px; /* Pocket journal width */
   margin: 0 auto;
-  padding: 16px 16px 20px 16px;
+  padding: 14px 14px 24px 14px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+/* Custom Scrollbar for Vintage Journal */
+.main-content::-webkit-scrollbar {
+  width: 6px;
+}
+.main-content::-webkit-scrollbar-track {
+  background: rgba(214, 198, 178, 0.3);
+  border-radius: 3px;
+}
+.main-content::-webkit-scrollbar-thumb {
+  background: var(--color-border-active);
+  border-radius: 3px;
+}
+
 /* ==========================================================================
-   Navbar (Minimal Header: Logo + Logout)
+   Navbar (Vintage Ribbon & Wax Stamp)
    ========================================================================== */
 
 .navbar {
-  background-color: var(--color-bg);
-  border-bottom: 1.5px solid var(--color-border-subtle);
+  background-color: var(--color-surface-subtle);
+  border-bottom: 2px solid var(--color-border-subtle);
+  box-shadow: 0 2px 10px rgba(44, 36, 29, 0.05);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -97,12 +142,9 @@ body {
 .brand-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   text-decoration: none;
-  color: var(--color-primary);
-  font-weight: 800;
-  font-size: 19px;
-  letter-spacing: -0.3px;
+  color: var(--color-text-dark);
 }
 
 .brand-icon {
@@ -111,9 +153,28 @@ body {
   justify-content: center;
   width: 36px;
   height: 36px;
-  background-color: var(--color-surface-subtle);
-  border: 1.5px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-logo:hover .brand-icon {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.2px;
+  color: var(--color-text-dark);
 }
 
 .nav-user-section {
@@ -126,14 +187,16 @@ body {
   width: 38px;
   height: 38px;
   border-radius: var(--radius-pill);
-  background-color: var(--color-surface-subtle);
-  border: 1.5px solid var(--color-border-active);
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border-active);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-family: var(--font-serif);
+  font-size: 16px;
   font-weight: 800;
   color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(44, 36, 29, 0.1);
   user-select: none;
   cursor: default;
   transition: transform 0.15s ease;
@@ -153,11 +216,12 @@ body {
   justify-content: center;
   width: 38px;
   height: 38px;
-  background-color: var(--color-surface-subtle);
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-border-active);
+  background-color: var(--color-surface);
+  color: var(--color-text-subtle);
+  border: 1.5px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
   cursor: pointer;
+  box-shadow: 0 1px 3px rgba(44, 36, 29, 0.08);
   transition: all 0.15s ease;
 }
 
@@ -165,43 +229,127 @@ body {
   background-color: var(--color-primary);
   border-color: var(--color-primary);
   color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .nav-logout-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
 }
 
 /* ==========================================================================
-   Dashboard Page (Screen-Filling Action Cards)
+   Dashboard Page (Scrapbook Journal Deckle Card from Image 1)
    ========================================================================== */
 
 .dashboard-minimal {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 8px 0 16px 0;
+  padding: 4px 0 16px 0;
   box-sizing: border-box;
   min-height: 0;
 }
 
+.dashboard-scrapbook {
+  position: relative;
+}
+
+/* Central Torn Deckle Scrapbook Card */
+.scrapbook-main-card {
+  position: relative;
+  background-color: #fffdf9;
+  background-image: 
+    radial-gradient(rgba(189, 162, 126, 0.08) 1px, transparent 0);
+  background-size: 16px 16px;
+  border: 2.5px solid #cfbea5;
+  border-radius: 18px;
+  padding: 28px 20px 24px 20px;
+  box-shadow: 0 8px 24px rgba(44, 36, 29, 0.12), 0 2px 6px rgba(44, 36, 29, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+}
+
+/* Paperclip from Image 1 */
+.scrapbook-clip-decoration {
+  position: absolute;
+  top: -12px;
+  right: 28px;
+  width: 16px;
+  height: 44px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.paperclip-shape {
+  width: 16px;
+  height: 44px;
+  border: 3px solid #332b24;
+  border-radius: 9px;
+  box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+
+.paperclip-shape::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 2px;
+  width: 6px;
+  height: 26px;
+  border: 2.5px solid #332b24;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+
+/* Washi Tape Strip from Image 1 */
+.scrapbook-tape-decoration {
+  position: absolute;
+  top: -8px;
+  left: 32px;
+  width: 65px;
+  height: 20px;
+  background: rgba(243, 232, 210, 0.85);
+  border: 1px solid rgba(184, 159, 132, 0.4);
+  box-shadow: 0 1px 3px rgba(44, 36, 29, 0.1);
+  transform: rotate(-3deg);
+  z-index: 10;
+  pointer-events: none;
+}
+
 .minimal-header {
   text-align: center;
-  padding: 4px 8px 20px 8px;
+  padding: 6px 8px 12px 8px;
   flex-shrink: 0;
 }
 
+.scrapbook-wax-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: #fbeee9;
+  border: 2px solid #ebbdb8;
+  border-radius: var(--radius-pill);
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(141, 61, 47, 0.12);
+}
+
 .minimal-title {
-  font-size: 32px;
-  font-weight: 900;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 800;
   color: var(--color-text-dark);
   letter-spacing: -0.5px;
-  margin: 0 0 6px 0;
+  margin: 0 0 4px 0;
 }
 
 .minimal-user-text {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--color-text-subtle);
   margin: 0;
+  font-family: var(--font-typewriter);
 }
 
 .minimal-user-text span {
@@ -210,27 +358,33 @@ body {
   word-break: break-all;
 }
 
-/* Two Big Action Buttons: Flexible & Filling the screen */
+/* Two Big Action Buttons */
 .big-actions-container {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  min-height: 0;
+  gap: 16px;
+  flex: 1;
 }
 
 .big-action-card {
   flex: 1;
-  min-height: 160px;
+  min-height: 140px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 26px 24px;
-  border-radius: var(--radius-xl);
+  padding: 22px 20px;
+  border-radius: var(--radius-lg);
   text-decoration: none;
   cursor: pointer;
   box-sizing: border-box;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.big-action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(44, 36, 29, 0.15);
 }
 
 .big-action-card:active {
@@ -240,35 +394,39 @@ body {
 .big-action-content {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   flex: 1;
 }
 
-/* Card 1: Solid Romantic Rose Pink */
+/* Action 1: Deep Terracotta Wax Seal Leather Style */
 .big-action-primary {
   background-color: var(--color-primary);
-  border: 2px solid var(--color-primary);
+  border: 2.5px solid #752f23;
   color: #ffffff;
+  box-shadow: 0 4px 14px rgba(141, 61, 47, 0.25);
 }
 
 .big-action-primary:hover {
   background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  border-color: #5e241a;
 }
 
 .big-action-primary .big-action-title {
   color: #ffffff;
+  font-family: var(--font-serif);
 }
 
 .big-action-primary .big-action-desc {
-  color: #ffe4e6;
+  color: #f7deda;
+  font-family: var(--font-sans);
 }
 
 .big-action-icon-circle {
-  width: 68px;
-  height: 68px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-pill);
-  background-color: rgba(255, 255, 255, 0.22);
+  background-color: rgba(255, 255, 255, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -276,8 +434,8 @@ body {
 }
 
 .big-action-arrow {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-pill);
   background-color: rgba(255, 255, 255, 0.2);
   display: flex;
@@ -286,20 +444,22 @@ body {
   flex-shrink: 0;
 }
 
-/* Card 2: Soft Warm Blush Rose Surface */
+/* Action 2: Aged Parchment Ledger Style */
 .big-action-secondary {
-  background-color: var(--color-surface-subtle);
-  border: 2.5px solid var(--color-border-active);
+  background-color: #faf5ec;
+  border: 2.5px solid var(--color-card-border);
   color: var(--color-text-dark);
+  box-shadow: 0 3px 10px rgba(44, 36, 29, 0.1);
 }
 
 .big-action-secondary:hover {
-  background-color: var(--color-surface-hover);
-  border-color: var(--color-primary);
+  background-color: #f4ecdc;
+  border-color: #1a140f;
 }
 
 .big-action-secondary .big-action-title {
-  color: var(--color-primary);
+  color: var(--color-text-dark);
+  font-family: var(--font-serif);
 }
 
 .big-action-secondary .big-action-desc {
@@ -308,73 +468,109 @@ body {
 
 .big-action-icon-circle.secondary-icon {
   background-color: #ffffff;
-  border: 2px solid var(--color-border-subtle);
+  border: 1.5px solid var(--color-border-active);
 }
 
 .big-action-arrow.secondary-arrow {
   background-color: #ffffff;
-  border: 2px solid var(--color-border-subtle);
+  border: 1.5px solid var(--color-border-active);
 }
 
 .big-action-text-wrap {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .big-action-title {
-  font-size: 26px;
-  font-weight: 900;
+  font-size: 24px;
+  font-weight: 800;
   margin: 0;
   line-height: 1.2;
 }
 
 .big-action-desc {
-  font-size: 13.5px;
+  font-size: 13px;
   margin: 0;
   line-height: 1.4;
 }
 
+/* Torn Note Quote snippet (Direct from Image 1!) */
+.scrapbook-quote-scrap {
+  align-self: flex-end;
+  background-color: #dfc5a4;
+  background-image: linear-gradient(135deg, #e3ccae 0%, #d4b58e 100%);
+  border: 1.5px solid #bba17f;
+  border-radius: 4px 12px 6px 14px;
+  padding: 10px 18px;
+  margin-top: 4px;
+  box-shadow: 2px 3px 8px rgba(44, 36, 29, 0.15);
+  transform: rotate(-2deg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.scrapbook-quote-text {
+  font-family: var(--font-handwriting);
+  font-size: 20px;
+  color: #3b2c1f;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.scrapbook-quote-heart {
+  font-family: var(--font-handwriting);
+  font-size: 22px;
+  color: var(--color-primary);
+  font-weight: bold;
+}
+
 /* ==========================================================================
-   Minimal Corner Icon Buttons (Back & Add Buttons: No Text)
+   Minimal Corner Icon Buttons (Back & Add Buttons)
    ========================================================================== */
 
 .corner-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  background-color: var(--color-surface-subtle);
-  border: 1.5px solid var(--color-border-subtle);
-  color: var(--color-primary);
+  width: 42px;
+  height: 42px;
+  background-color: #ffffff;
+  border: 2px solid var(--color-border-active);
+  color: var(--color-text-dark);
   border-radius: var(--radius-pill);
   text-decoration: none;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(44, 36, 29, 0.1);
   transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .corner-icon-btn:hover {
-  background-color: var(--color-surface-hover);
+  background-color: #f7f0e3;
   border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-1px);
 }
 
 .corner-icon-primary {
   background-color: var(--color-primary);
-  border: 1.5px solid var(--color-primary);
+  border: 2px solid #752f23;
   color: #ffffff;
 }
 
 .corner-icon-primary:hover {
   background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  border-color: #5e241a;
+  color: #ffffff;
 }
 
 .curvey-nav-row {
   display: flex;
   justify-content: flex-start;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .history-top-bar {
@@ -384,270 +580,86 @@ body {
 }
 
 /* ==========================================================================
-   Curvey Card & Form Layout
+   History Page Canvas (Using Image 2 Collage Backdrop & Image 3 Staggered Wireframe!)
    ========================================================================== */
 
 .curvey-page-container {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative;
+}
+
+/* The Scrapbook Journal Canvas with Image 2 backdrop */
+.history-scrapbook-canvas {
+  position: relative;
+  background-image: 
+    linear-gradient(rgba(247, 240, 227, 0.25), rgba(247, 240, 227, 0.25)),
+    url('/Bg/2.jpeg');
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: repeat-y;
+  background-color: #dfc8a5; /* Fallback kraft tone */
+  border-radius: 20px;
+  padding: 20px 16px 40px 16px;
+  box-shadow: var(--shadow-float);
+  border: 3px solid #bda688;
+  overflow: hidden;
+}
+
+/* Decorative Silver Paperclip from Image 2 (top left) */
+.history-vintage-paperclip {
+  position: absolute;
+  top: 14px;
+  left: 20px;
+  width: 14px;
+  height: 40px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.silver-clip-wire {
+  width: 14px;
+  height: 40px;
+  border: 2.5px solid #7a7a7a;
+  border-radius: 7px;
+  box-shadow: 1px 2px 5px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.silver-clip-wire::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 2px;
+  width: 5px;
+  height: 24px;
+  border: 2px solid #7a7a7a;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
 }
 
 .history-heading-wrap {
   text-align: center;
-  padding: 4px 0;
-}
-
-.curvey-card {
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
-  padding: 26px 20px;
-  box-sizing: border-box;
-}
-
-.curvey-card-header {
-  text-align: center;
-  margin-bottom: 22px;
-}
-
-.curvey-icon-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  background-color: var(--color-surface-subtle);
-  border: 1.5px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill);
-  margin-bottom: 10px;
+  padding: 4px 0 2px 0;
 }
 
 .curvey-title {
-  font-size: 24px;
-  font-weight: 900;
-  color: var(--color-primary);
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-text-dark);
   margin-bottom: 4px;
+  letter-spacing: -0.3px;
 }
 
 .curvey-subtitle {
+  font-family: var(--font-typewriter);
   font-size: 13px;
   color: var(--color-text-subtle);
 }
 
-/* Curvey Alerts */
-.curvey-alert {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
-  border-radius: var(--radius-lg);
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-
-.curvey-alert-error {
-  background-color: var(--color-danger-bg);
-  border: 1.5px solid var(--color-danger-border);
-  color: var(--color-danger);
-}
-
-.curvey-alert-success {
-  background-color: var(--color-success-bg);
-  border: 1.5px solid var(--color-success-border);
-  color: var(--color-text-pink);
-}
-
-.curvey-alert-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-weight: 800;
-  cursor: pointer;
-  padding: 0;
-  font-size: 13px;
-  text-decoration: underline;
-}
-
-/* Curvey Form Inputs */
-.curvey-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.curvey-form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.curvey-form-group label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-pink);
-  margin-left: 6px;
-}
-
-.curvey-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.curvey-input-icon {
-  position: absolute;
-  left: 16px;
-  color: var(--color-primary);
-  pointer-events: none;
-}
-
-.curvey-input {
-  width: 100%;
-  height: 50px;
-  padding: 10px 18px 10px 46px;
-  background-color: var(--color-bg);
-  border: 2px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill);
-  font-size: 15px;
-  color: var(--color-text-dark);
-  outline: none;
-  box-sizing: border-box;
-}
-
-.curvey-input:focus {
-  border-color: var(--color-primary);
-}
-
-.textarea-wrap {
-  align-items: flex-start;
-}
-
-.textarea-icon {
-  top: 14px;
-}
-
-.curvey-textarea {
-  height: 90px;
-  border-radius: var(--radius-lg);
-  padding-top: 12px;
-  resize: vertical;
-}
-
-/* Curvey Dropzone */
-.curvey-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 26px 16px;
-  background-color: var(--color-surface-subtle);
-  border: 2px dashed var(--color-border-active);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.curvey-dropzone:hover {
-  background-color: var(--color-surface-hover);
-  border-color: var(--color-primary);
-}
-
-.dropzone-circle {
-  width: 50px;
-  height: 50px;
-  background-color: var(--color-bg);
-  border: 1.5px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 4px;
-}
-
-.curvey-dropzone-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--color-primary);
-}
-
-.curvey-dropzone-hint {
-  font-size: 12px;
-  color: var(--color-text-subtle);
-}
-
-.file-hidden-input {
-  display: none;
-}
-
-.curvey-preview-card {
-  position: relative;
-  width: 100%;
-  height: 200px;
-  border-radius: var(--radius-lg);
-  border: 2px solid var(--color-border-active);
-  overflow: hidden;
-  background-color: var(--color-surface-subtle);
-}
-
-.curvey-preview-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.curvey-preview-remove {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background-color: var(--color-bg);
-  border: 1.5px solid var(--color-border-subtle);
-  color: var(--color-danger);
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-pill);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.curvey-btn-submit {
-  width: 100%;
-  min-height: 52px;
-  background-color: var(--color-primary);
-  color: #ffffff;
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius-pill);
-  font-size: 16px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-  margin-top: 10px;
-}
-
-.curvey-btn-submit:hover:not(:disabled) {
-  background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.curvey-btn-submit:disabled {
-  background-color: var(--color-border-subtle);
-  border-color: var(--color-border-subtle);
-  color: var(--color-text-subtle);
-  cursor: not-allowed;
-}
-
-/* ==========================================================================
-   History Page (Expandable List with Thumbnails)
-   ========================================================================== */
-
+/* Search Bar (Vintage Ledger Search) */
 .curvey-search-bar {
   position: relative;
   display: flex;
@@ -665,17 +677,19 @@ body {
   width: 100%;
   height: 46px;
   padding: 10px 38px 10px 46px;
-  background-color: var(--color-bg);
-  border: 2px solid var(--color-border-subtle);
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--color-card-border);
   border-radius: var(--radius-pill);
   font-size: 14px;
   color: var(--color-text-dark);
   outline: none;
+  box-shadow: 0 2px 6px rgba(44, 36, 29, 0.1);
   box-sizing: border-box;
 }
 
 .curvey-search-input:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(141, 61, 47, 0.15);
 }
 
 .curvey-search-clear {
@@ -688,29 +702,87 @@ body {
   padding: 4px;
 }
 
+/* ==========================================================================
+   Staggered Date Logs List (EXACT LAYOUT FROM IMAGE 3 WIREFRAME!)
+   Box 1: Top Right
+   Box 2: Mid-Upper Left
+   Box 3: Center Right
+   Box 4: Lower Left
+   Box 5: Bottom Right
+   ========================================================================== */
+
 .curvey-logs-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
+  width: 100%;
+  padding: 6px 2px 20px 2px;
+  position: relative;
 }
 
-/* Log Item Card (Curvey) */
+/* Staggered Memory Cards */
 .log-item-card {
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  width: 86%; /* Gives clear horizontal stagger room within the central parchment */
+  max-width: 420px;
+  background-color: var(--color-surface); /* Pure crisp white background as drawn in Image 3 */
+  border: 2.5px solid var(--color-card-border); /* Solid dark border from Image 3 wireframe */
+  border-radius: 12px;
+  box-shadow: var(--shadow-stagger);
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.15s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Odd cards (index 0, 2, 4): Stagger to the RIGHT */
+.log-item-card.stagger-right,
+.log-item-card:nth-child(odd) {
+  align-self: flex-end;
+  margin-left: auto;
+  margin-right: 0;
+  transform: rotate(0.8deg);
+}
+
+/* Even cards (index 1, 3, 5): Stagger to the LEFT */
+.log-item-card.stagger-left,
+.log-item-card:nth-child(even) {
+  align-self: flex-start;
+  margin-left: 0;
+  margin-right: auto;
+  transform: rotate(-0.8deg);
 }
 
 .log-item-card:hover {
-  border-color: var(--color-border-active);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 22px rgba(42, 34, 27, 0.22);
+  border-color: #1a140f;
+  z-index: 5;
 }
 
+/* Mini decorative washi tape on each card */
+.log-item-card::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 20px;
+  width: 32px;
+  height: 10px;
+  background: rgba(240, 228, 206, 0.85);
+  border: 1px solid rgba(184, 159, 132, 0.4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transform: rotate(-1.5deg);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Expanded state fills full width */
 .log-item-card.is-expanded {
+  width: 100%;
+  align-self: center;
+  transform: none !important;
   border-color: var(--color-primary);
-  background-color: var(--color-surface);
+  box-shadow: 0 10px 28px rgba(42, 34, 27, 0.25);
+  z-index: 10;
 }
 
 /* Collapsed Header / Summary View */
@@ -718,16 +790,19 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px;
+  padding: 12px 14px;
 }
 
+/* Polaroid-Style Thumbnail */
 .log-thumbnail-wrap {
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-md);
+  width: 68px;
+  height: 68px;
+  border-radius: 8px;
   overflow: hidden;
-  background-color: var(--color-surface-subtle);
-  border: 1.5px solid var(--color-border-subtle);
+  background-color: #ffffff;
+  border: 2px solid var(--color-border-subtle);
+  padding: 2px;
+  box-shadow: 0 2px 5px rgba(44, 36, 29, 0.1);
   flex-shrink: 0;
 }
 
@@ -735,16 +810,20 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 6px;
   display: block;
 }
 
 .log-no-thumbnail {
   width: 100%;
   height: 100%;
+  background-color: var(--color-surface-subtle);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
+  font-family: var(--font-typewriter);
   color: var(--color-text-subtle);
 }
 
@@ -757,7 +836,8 @@ body {
 }
 
 .log-venue-title {
-  font-size: 16px;
+  font-family: var(--font-serif);
+  font-size: 16.5px;
   font-weight: 800;
   color: var(--color-text-dark);
   white-space: nowrap;
@@ -766,38 +846,68 @@ body {
 }
 
 .log-desc-preview {
-  font-size: 13px;
+  font-family: var(--font-handwriting);
+  font-size: 16px;
   color: var(--color-text-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.log-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .log-date-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-family: var(--font-typewriter);
   font-size: 11px;
   font-weight: 700;
   color: var(--color-primary);
-  background-color: var(--color-surface-subtle);
-  border: 1px solid var(--color-border-subtle);
-  padding: 3px 8px;
+  background-color: #fdf5f2;
+  border: 1px solid #ebbdb8;
+  padding: 2px 8px;
   border-radius: var(--radius-pill);
   align-self: flex-start;
 }
 
+.log-soundtrack-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-typewriter);
+  font-size: 11px;
+  font-weight: 700;
+  color: #3b2c1f;
+  background-color: #f7efe4;
+  border: 1px solid #d4be9b;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
 .log-expand-icon {
-  color: var(--color-primary);
+  color: var(--color-text-subtle);
   padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.2s ease, color 0.15s ease;
 }
 
-/* Expanded Details Pane */
+.log-item-card:hover .log-expand-icon {
+  color: var(--color-primary);
+}
+
+/* Expanded Details View */
 .log-expanded-details {
-  border-top: 2px solid var(--color-surface-subtle);
+  border-top: 1.5px dashed var(--color-border-active);
+  background-color: #fffdf9;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -805,20 +915,24 @@ body {
   cursor: default;
 }
 
+/* Polaroid Full Photo Frame */
 .log-full-photo-wrap {
   width: 100%;
-  max-height: 280px;
-  border-radius: var(--radius-lg);
+  max-height: 290px;
+  border-radius: 8px;
   overflow: hidden;
+  background-color: #ffffff;
+  padding: 8px 8px 18px 8px; /* Polaroid bottom border */
   border: 1.5px solid var(--color-border-subtle);
-  background-color: var(--color-surface-subtle);
+  box-shadow: 0 4px 12px rgba(44, 36, 29, 0.12);
 }
 
 .log-full-photo {
   width: 100%;
   height: 100%;
-  max-height: 280px;
+  max-height: 250px;
   object-fit: cover;
+  border-radius: 4px;
   display: block;
 }
 
@@ -836,42 +950,78 @@ body {
 }
 
 .log-detail-venue {
-  font-size: 17px;
+  font-family: var(--font-serif);
+  font-size: 18px;
   font-weight: 800;
   color: var(--color-text-dark);
 }
 
 .log-detail-date {
+  font-family: var(--font-typewriter);
   font-size: 13px;
   color: var(--color-text-medium);
   font-weight: 600;
 }
 
+/* Notebook Paper Style Notes */
 .log-detail-notes {
-  background-color: var(--color-surface-subtle);
+  background-color: #faf5ec;
   border: 1.5px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
 }
 
 .notes-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-family: var(--font-serif);
+  font-size: 13px;
   font-weight: 800;
   color: var(--color-primary);
 }
 
 .notes-text {
-  font-size: 14px;
+  font-family: var(--font-handwriting);
+  font-size: 19px;
   color: var(--color-text-dark);
-  line-height: 1.5;
+  line-height: 1.4;
   margin: 0;
   white-space: pre-wrap;
+}
+
+/* Scrapbook Soundtrack Player Widget */
+.log-detail-soundtrack {
+  background-color: #faf3e8;
+  border: 1.5px solid var(--color-border-active);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 4px rgba(44, 36, 29, 0.06);
+}
+
+.soundtrack-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.scrapbook-audio-player {
+  width: 100%;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  accent-color: var(--color-primary);
+  outline: none;
 }
 
 .log-detail-footer {
@@ -882,7 +1032,8 @@ body {
 }
 
 .log-detail-author {
-  font-size: 12px;
+  font-family: var(--font-typewriter);
+  font-size: 11.5px;
   color: var(--color-text-subtle);
 }
 
@@ -890,39 +1041,449 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--color-bg);
+  background-color: #ffffff;
   color: var(--color-danger);
   border: 1.5px solid var(--color-danger);
   padding: 6px 14px;
   border-radius: var(--radius-pill);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .curvey-delete-btn:hover:not(:disabled) {
-  background-color: var(--color-danger-bg);
+  background-color: var(--color-danger);
+  color: #ffffff;
 }
 
-/* Empty State */
-.curvey-empty-state {
-  background-color: var(--color-surface-subtle);
+/* ==========================================================================
+   Form & Log Date Page (Deckle Card Style from Image 1)
+   ========================================================================== */
+
+.curvey-card {
+  background-color: #ffffff;
+  border: 2.5px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  padding: 26px 20px;
+  box-sizing: border-box;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+.deckle-card {
+  background-color: #fffdf9;
+  border: 2.5px solid #2e2620;
+}
+
+/* Paperclip on Cards */
+.card-paperclip {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  width: 14px;
+  height: 40px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.card-paperclip .paperclip-shape {
+  width: 14px;
+  height: 40px;
+  border: 2.5px solid #2e2620;
+  border-radius: 8px;
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+.card-washi-tape {
+  position: absolute;
+  top: -8px;
+  left: 30px;
+  width: 60px;
+  height: 18px;
+  background: rgba(240, 230, 210, 0.85);
+  border: 1px solid rgba(184, 159, 132, 0.4);
+  transform: rotate(-2deg);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.curvey-card-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.curvey-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background-color: #fbeee9;
+  border: 1.5px solid #ebbdb8;
+  border-radius: var(--radius-pill);
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(141, 61, 47, 0.1);
+}
+
+/* Feedback Alerts */
+.curvey-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.curvey-alert-error {
+  background-color: var(--color-danger-bg);
+  border: 1.5px solid var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.curvey-alert-success {
+  background-color: #fdf6f2;
+  border: 1.5px solid #ebbdb8;
+  color: var(--color-primary);
+}
+
+.curvey-alert-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+/* Form Inputs */
+.curvey-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.curvey-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.curvey-form-group label {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  margin-left: 4px;
+}
+
+.curvey-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.curvey-input-icon {
+  position: absolute;
+  left: 16px;
+  color: var(--color-primary);
+  pointer-events: none;
+}
+
+.curvey-input {
+  width: 100%;
+  height: 48px;
+  padding: 10px 18px 10px 46px;
+  background-color: #ffffff;
+  border: 2px solid var(--color-border-active);
+  border-radius: var(--radius-pill);
+  font-size: 14.5px;
+  color: var(--color-text-dark);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.curvey-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(141, 61, 47, 0.12);
+}
+
+.textarea-wrap {
+  align-items: flex-start;
+}
+
+.textarea-icon {
+  top: 14px;
+}
+
+.curvey-textarea {
+  height: 95px;
+  border-radius: var(--radius-md);
+  padding-top: 12px;
+  resize: vertical;
+  font-family: var(--font-sans);
+}
+
+/* Vintage Polaroid Photo Dropzone */
+.curvey-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 26px 16px;
+  background-color: #faf5ec;
   border: 2px dashed var(--color-border-active);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.curvey-dropzone:hover {
+  background-color: #f3ebd8;
+  border-color: var(--color-primary);
+}
+
+.dropzone-circle {
+  width: 48px;
+  height: 48px;
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-border-active);
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 5px rgba(44, 36, 29, 0.08);
+}
+
+.curvey-dropzone-title {
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.curvey-dropzone-hint {
+  font-family: var(--font-typewriter);
+  font-size: 11.5px;
+  color: var(--color-text-subtle);
+}
+
+.file-hidden-input {
+  display: none;
+}
+
+.curvey-preview-card {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  border-radius: var(--radius-md);
+  border: 2.5px solid var(--color-card-border);
+  overflow: hidden;
+  background-color: #ffffff;
+  box-shadow: var(--shadow-card);
+}
+
+.curvey-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.curvey-preview-remove {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-danger);
+  color: var(--color-danger);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: all 0.15s ease;
+}
+
+.curvey-preview-remove:hover {
+  background-color: var(--color-danger);
+  color: #ffffff;
+}
+
+/* Soundtrack Upload Styles (Optional) */
+.soundtrack-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.optional-tag {
+  font-family: var(--font-typewriter);
+  font-size: 11px;
+  background-color: #f4ecdc;
+  border: 1px solid #d8c8b4;
+  color: var(--color-text-subtle);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+}
+
+.soundtrack-dropzone {
+  background-color: #fdf9f2;
+  border: 2px dashed var(--color-border-active);
+  padding: 20px 16px;
+}
+
+.soundtrack-icon-circle {
+  background-color: #fbeee9;
+  border-color: #ebbdb8;
+}
+
+.soundtrack-preview-card {
+  position: relative;
+  width: 100%;
+  background-color: #faf3e8;
+  border: 2px solid var(--color-border-active);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-paper);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soundtrack-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.soundtrack-spinning-disc {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background-color: #ffffff;
+  border: 1.5px solid var(--color-border-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: spinDisc 6s linear infinite;
+}
+
+@keyframes spinDisc {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.soundtrack-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.soundtrack-filename {
+  font-family: var(--font-typewriter);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soundtrack-mini-player {
+  width: 100%;
+  height: 32px;
+  accent-color: var(--color-primary);
+}
+
+.soundtrack-remove-btn {
+  position: static !important;
+  flex-shrink: 0;
+}
+
+/* Submit Button (Wax Seal Terracotta Style) */
+.curvey-btn-submit {
+  width: 100%;
+  min-height: 50px;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border: 2px solid #752f23;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  box-shadow: 0 4px 12px rgba(141, 61, 47, 0.25);
+  transition: all 0.15s ease;
+}
+
+.curvey-btn-submit:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+  border-color: #5e241a;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(141, 61, 47, 0.3);
+}
+
+.curvey-btn-submit:disabled {
+  background-color: var(--color-border-subtle);
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-subtle);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   Empty State & Loading Spinner
+   ========================================================================== */
+
+.curvey-empty-state {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 2px dashed var(--color-border-active);
+  border-radius: var(--radius-lg);
   padding: 36px 20px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  box-shadow: 0 4px 12px rgba(44, 36, 29, 0.08);
 }
 
 .empty-circle {
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   border-radius: var(--radius-pill);
-  background-color: var(--color-bg);
-  border: 2px solid var(--color-border-subtle);
+  background-color: #fbeee9;
+  border: 1.5px solid #ebbdb8;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -930,7 +1491,8 @@ body {
 }
 
 .curvey-empty-state h3 {
-  font-size: 18px;
+  font-family: var(--font-serif);
+  font-size: 19px;
   font-weight: 800;
   color: var(--color-text-dark);
   margin: 0;
@@ -951,6 +1513,7 @@ body {
   gap: 12px;
   padding: 48px 16px;
   color: var(--color-text-subtle);
+  font-family: var(--font-typewriter);
   font-size: 14px;
 }
 
@@ -979,7 +1542,7 @@ body {
 }
 
 /* ==========================================================================
-   Auth Pages (Curvey)
+   Auth Pages (Vintage Sealed Keepsake Card)
    ========================================================================== */
 
 .auth-page-container {
@@ -989,17 +1552,22 @@ body {
   justify-content: center;
   padding: 24px 16px;
   background-color: var(--color-bg);
+  background-image: 
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.4) 0%, transparent 70%),
+    linear-gradient(to bottom, #eae0cf 0%, #ded0bb 100%);
   box-sizing: border-box;
 }
 
 .auth-card {
   width: 100%;
   max-width: 420px;
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-border-subtle);
+  background-color: #ffffff;
+  border: 2.5px solid var(--color-card-border);
   border-radius: var(--radius-xl);
-  padding: 32px 24px;
+  padding: 34px 26px;
   box-sizing: border-box;
+  box-shadow: var(--shadow-float);
+  position: relative;
 }
 
 .auth-header {
@@ -1013,22 +1581,26 @@ body {
   justify-content: center;
   width: 56px;
   height: 56px;
-  background-color: var(--color-surface-subtle);
-  border: 2px solid var(--color-border-subtle);
+  background-color: #fbeee9;
+  border: 2px solid #ebbdb8;
   border-radius: var(--radius-pill);
   margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(141, 61, 47, 0.15);
 }
 
 .auth-title {
-  font-size: 26px;
-  font-weight: 900;
-  color: var(--color-primary);
+  font-family: var(--font-serif);
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--color-text-dark);
   margin-bottom: 6px;
+  letter-spacing: -0.3px;
 }
 
 .auth-subtitle {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--color-text-subtle);
+  line-height: 1.4;
 }
 
 .auth-form {
@@ -1044,10 +1616,11 @@ body {
 }
 
 .form-group label {
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--color-text-pink);
-  margin-left: 6px;
+  color: var(--color-text-dark);
+  margin-left: 4px;
 }
 
 .input-with-icon {
@@ -1065,19 +1638,21 @@ body {
 
 .text-input {
   width: 100%;
-  height: 50px;
+  height: 48px;
   padding: 10px 18px 10px 46px;
-  background-color: var(--color-bg);
-  border: 2px solid var(--color-border-subtle);
+  background-color: #ffffff;
+  border: 2px solid var(--color-border-active);
   border-radius: var(--radius-pill);
   color: var(--color-text-dark);
-  font-size: 15px;
+  font-size: 14.5px;
   outline: none;
   box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .text-input:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(141, 61, 47, 0.12);
 }
 
 .text-input.has-toggle {
@@ -1103,11 +1678,12 @@ body {
 
 .btn-submit {
   width: 100%;
-  min-height: 52px;
+  min-height: 50px;
   background-color: var(--color-primary);
   color: #ffffff;
-  border: 2px solid var(--color-primary);
+  border: 2px solid #752f23;
   border-radius: var(--radius-pill);
+  font-family: var(--font-serif);
   font-size: 16px;
   font-weight: 800;
   display: inline-flex;
@@ -1116,11 +1692,15 @@ body {
   gap: 8px;
   cursor: pointer;
   margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(141, 61, 47, 0.25);
+  transition: all 0.15s ease;
 }
 
 .btn-submit:hover:not(:disabled) {
   background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  border-color: #5e241a;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(141, 61, 47, 0.3);
 }
 
 .btn-submit:disabled {
@@ -1135,7 +1715,7 @@ body {
   text-align: center;
   font-size: 13px;
   color: var(--color-text-subtle);
-  border-top: 1px solid var(--color-surface-subtle);
+  border-top: 1px dashed var(--color-border-subtle);
   padding-top: 16px;
 }
 
@@ -1154,7 +1734,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 8px;
@@ -1167,13 +1747,13 @@ body {
 }
 
 .alert-success {
-  background-color: var(--color-success-bg);
-  border: 1.5px solid var(--color-success-border);
-  color: var(--color-text-pink);
+  background-color: #fdf6f2;
+  border: 1.5px solid #ebbdb8;
+  color: var(--color-primary);
 }
 
 /* ==========================================================================
-   Not Found (404)
+   Not Found (404 Page)
    ========================================================================== */
 
 .not-found-container {
@@ -1187,29 +1767,32 @@ body {
 .not-found-card {
   text-align: center;
   max-width: 400px;
-  background-color: var(--color-surface);
-  border: 2px solid var(--color-border-subtle);
+  background-color: #ffffff;
+  border: 2.5px solid var(--color-card-border);
   border-radius: var(--radius-xl);
   padding: 36px 24px;
+  box-shadow: var(--shadow-float);
 }
 
 .not-found-code {
-  font-size: 56px;
+  font-family: var(--font-serif);
+  font-size: 64px;
   font-weight: 900;
   color: var(--color-primary);
   line-height: 1;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .not-found-title {
-  font-size: 18px;
+  font-family: var(--font-serif);
+  font-size: 20px;
   font-weight: 800;
   color: var(--color-text-dark);
   margin-bottom: 6px;
 }
 
 .not-found-desc {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--color-text-subtle);
   line-height: 1.4;
 }

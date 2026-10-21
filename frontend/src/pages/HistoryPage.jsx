@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   X,
   History as HistoryIcon,
+  Music,
+  Disc,
 } from "lucide-react";
 
 export function HistoryPage() {
@@ -99,7 +101,13 @@ export function HistoryPage() {
     .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
   return (
-    <div className="curvey-page-container">
+    <div className="curvey-page-container history-scrapbook-canvas">
+      {/* Decorative Scrapbook Elements from Image 2 */}
+      <div className="history-vintage-paperclip" aria-hidden="true">
+        <div className="silver-clip-wire"></div>
+      </div>
+      <div className="history-vintage-lotus" aria-hidden="true"></div>
+
       {/* Top Header Row */}
       <div className="history-top-bar">
         <Link to="/" className="corner-icon-btn" aria-label="Back to dashboard">
@@ -113,7 +121,7 @@ export function HistoryPage() {
       <div className="history-heading-wrap">
         <h1 className="curvey-title">Date History</h1>
         <p className="curvey-subtitle">
-          {posts.length} {posts.length === 1 ? "memory" : "memories"} logged
+          {posts.length} {posts.length === 1 ? "memory" : "memories"} preserved
         </p>
       </div>
 
@@ -148,7 +156,7 @@ export function HistoryPage() {
         <Search size={18} className="curvey-search-icon" />
         <input
           type="search"
-          placeholder="Search venues or notes..."
+          placeholder="Search venues or memories..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="curvey-search-input"
@@ -164,22 +172,22 @@ export function HistoryPage() {
         )}
       </div>
 
-      {/* Logs List */}
+      {/* Logs List - Staggered Left & Right matching Image 3 wireframe! */}
       {isLoading ? (
         <div className="curvey-loading">
           <div className="loading-spinner"></div>
-          <span>Loading date logs...</span>
+          <span>Unrolling date memories...</span>
         </div>
       ) : filteredPosts.length === 0 ? (
         <div className="curvey-empty-state">
           <div className="empty-circle">
-            <HistoryIcon size={32} color="#e11d48" />
+            <HistoryIcon size={30} color="#8d3d2f" />
           </div>
           <h3>{searchTerm ? "No matching dates" : "No date logs yet"}</h3>
           <p>
             {searchTerm
-              ? `No records found matching "${searchTerm}".`
-              : "Start documenting your favorite moments together!"}
+              ? `No memories found matching "${searchTerm}".`
+              : "Start documenting your favorite moments together in this journal!"}
           </p>
           <Link
             to="/log"
@@ -191,14 +199,15 @@ export function HistoryPage() {
           </Link>
         </div>
       ) : (
-        <div className="curvey-logs-list">
-          {filteredPosts.map((post) => {
+        <div className="curvey-logs-list scrapbook-staggered-list">
+          {filteredPosts.map((post, index) => {
             const isExpanded = expandedId === post._id;
+            const isStaggerRight = index % 2 === 0; // index 0, 2, 4 right, index 1, 3 left (matching Image 3 wireframe)
 
             return (
               <div
                 key={post._id}
-                className={`log-item-card ${isExpanded ? "is-expanded" : ""}`}
+                className={`log-item-card ${isStaggerRight ? "stagger-right" : "stagger-left"} ${isExpanded ? "is-expanded" : ""}`}
                 onClick={() => toggleExpand(post._id)}
               >
                 {/* Collapsed / Header Summary View */}
@@ -225,17 +234,25 @@ export function HistoryPage() {
                     {post.description && (
                       <div className="log-desc-preview">{post.description}</div>
                     )}
-                    <div className="log-date-tag">
-                      <Calendar size={12} />
-                      <span>
-                        {post.date
-                          ? new Date(post.date).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })
-                          : "No date"}
-                      </span>
+                    <div className="log-tags-row">
+                      <div className="log-date-tag">
+                        <Calendar size={12} />
+                        <span>
+                          {post.date
+                            ? new Date(post.date).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })
+                            : "No date"}
+                        </span>
+                      </div>
+                      {post.music?.audioUrl && (
+                        <div className="log-soundtrack-tag" title="Includes soundtrack">
+                          <Music size={11} />
+                          <span>Soundtrack</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -265,13 +282,13 @@ export function HistoryPage() {
                     {/* Venue & Full Date */}
                     <div className="log-detail-meta">
                       <div className="log-detail-row">
-                        <MapPin size={16} color="#e11d48" />
+                        <MapPin size={16} color="#8d3d2f" />
                         <span className="log-detail-venue">
                           {post.venue || "Unnamed Venue"}
                         </span>
                       </div>
                       <div className="log-detail-row">
-                        <Calendar size={16} color="#e11d48" />
+                        <Calendar size={16} color="#8d3d2f" />
                         <span className="log-detail-date">
                           {post.date
                             ? new Date(post.date).toLocaleDateString(undefined, {
@@ -289,17 +306,33 @@ export function HistoryPage() {
                     {post.description && (
                       <div className="log-detail-notes">
                         <div className="notes-header">
-                          <FileText size={14} color="#e11d48" />
+                          <FileText size={14} color="#8d3d2f" />
                           <span>Notes & Description</span>
                         </div>
                         <p className="notes-text">{post.description}</p>
                       </div>
                     )}
 
+                    {/* Memory Soundtrack Player (if post has music) */}
+                    {post.music?.audioUrl && (
+                      <div className="log-detail-soundtrack">
+                        <div className="soundtrack-header">
+                          <Disc size={15} color="#8d3d2f" />
+                          <span>Date Soundtrack</span>
+                        </div>
+                        <audio
+                          controls
+                          src={post.music.audioUrl}
+                          className="scrapbook-audio-player"
+                          preload="metadata"
+                        />
+                      </div>
+                    )}
+
                     {/* Card Footer: Author & Delete */}
                     <div className="log-detail-footer">
                       <span className="log-detail-author">
-                        By {post.createdBy?.email || "You"}
+                        Preserved by {post.createdBy?.email || "You"}
                       </span>
                       <button
                         type="button"

@@ -57,11 +57,17 @@ export function RegisterPage() {
 
   return (
     <div className="auth-page-container">
-      <div className="auth-card">
+      <div className="auth-card deckle-card">
+        {/* Paperclip decoration */}
+        <div className="card-paperclip" aria-hidden="true">
+          <div className="paperclip-shape"></div>
+        </div>
+        <div className="card-washi-tape" aria-hidden="true"></div>
+
         {/* Header */}
         <div className="auth-header">
           <div className="auth-brand-badge">
-            <Heart size={28} fill="#e11d48" color="#e11d48" />
+            <Heart size={26} fill="#8d3d2f" color="#8d3d2f" />
           </div>
           <h1 className="auth-title">Create Account</h1>
           <p className="auth-subtitle">

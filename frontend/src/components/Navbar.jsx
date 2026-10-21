@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Heart, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -19,7 +19,7 @@ export function Navbar() {
         {/* Brand */}
         <NavLink to="/" className="brand-logo">
           <span className="brand-icon">
-            <Heart size={20} fill="#e11d48" color="#e11d48" />
+            <img src="/logo.svg" alt="Date Logger Logo" className="brand-logo-img" />
           </span>
           <span className="brand-name">Date Logger</span>
         </NavLink>
@@ -42,7 +42,7 @@ export function Navbar() {
             title="Log out"
             aria-label="Log out"
           >
-            <LogOut size={17} strokeWidth={2.2} />
+            <LogOut size={16} strokeWidth={2.2} />
           </button>
         </div>
       </div>

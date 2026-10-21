@@ -12,6 +12,8 @@ import {
   AlertCircle,
   ArrowLeft,
   Sparkles,
+  Music,
+  Disc,
 } from "lucide-react";
 
 export function LogDatePage() {
@@ -25,6 +27,9 @@ export function LogDatePage() {
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [audioFile, setAudioFile] = useState(null);
+  const [audioFileName, setAudioFileName] = useState("");
+  const [audioPreview, setAudioPreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -47,6 +52,29 @@ export function LogDatePage() {
     if (imagePreview) {
       URL.revokeObjectURL(imagePreview);
       setImagePreview(null);
+    }
+  };
+
+  const handleAudioSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|aac|ogg)$/i)) {
+        setErrorMsg("Please select an audio file (MP3, M4A, WAV, etc.)");
+        return;
+      }
+      setErrorMsg("");
+      setAudioFile(file);
+      setAudioFileName(file.name);
+      setAudioPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveAudio = () => {
+    setAudioFile(null);
+    setAudioFileName("");
+    if (audioPreview) {
+      URL.revokeObjectURL(audioPreview);
+      setAudioPreview(null);
     }
   };
 
@@ -78,6 +106,11 @@ export function LogDatePage() {
     formData.append("description", description.trim());
     formData.append("image", imageFile);
 
+    // Audio / Soundtrack is completely optional
+    if (audioFile) {
+      formData.append("audio", audioFile);
+    }
+
     try {
       await postAPI.createPost(formData, token);
       setSuccessMsg("Date memory saved successfully!");
@@ -85,6 +118,7 @@ export function LogDatePage() {
       setDescription("");
       setDate(new Date().toISOString().split("T")[0]);
       handleRemoveImage();
+      handleRemoveAudio();
     } catch (err) {
       setErrorMsg(err.message || "Failed to save date. Check your network.");
     } finally {
@@ -101,14 +135,21 @@ export function LogDatePage() {
         </Link>
       </div>
 
-      <div className="curvey-card">
+      <div className="curvey-card deckle-card">
+        {/* Paperclip top decoration from Image 1 */}
+        <div className="card-paperclip" aria-hidden="true">
+          <div className="paperclip-shape"></div>
+        </div>
+        {/* Washi tape decoration */}
+        <div className="card-washi-tape" aria-hidden="true"></div>
+
         <div className="curvey-card-header">
           <div className="curvey-icon-badge">
-            <Sparkles size={20} color="#e11d48" />
+            <Sparkles size={20} color="#8d3d2f" />
           </div>
           <h1 className="curvey-title">Log a New Date</h1>
           <p className="curvey-subtitle">
-            Record your special memories and place
+            Preserve your cherished moments in this memory journal
           </p>
         </div>
 
@@ -194,7 +235,7 @@ export function LogDatePage() {
             {!imagePreview ? (
               <label className="curvey-dropzone" htmlFor="log-photo">
                 <div className="dropzone-circle">
-                  <UploadCloud size={28} color="#e11d48" />
+                  <UploadCloud size={28} color="#8d3d2f" />
                 </div>
                 <span className="curvey-dropzone-title">Upload a Photo</span>
                 <span className="curvey-dropzone-hint">
@@ -221,6 +262,57 @@ export function LogDatePage() {
                   className="curvey-preview-remove"
                   onClick={handleRemoveImage}
                   title="Remove photo"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Soundtrack / Music (Optional) */}
+          <div className="curvey-form-group">
+            <div className="soundtrack-label-row">
+              <label htmlFor="log-audio">Date Soundtrack</label>
+              <span className="optional-tag">Optional</span>
+            </div>
+
+            {!audioPreview ? (
+              <label className="curvey-dropzone soundtrack-dropzone" htmlFor="log-audio">
+                <div className="dropzone-circle soundtrack-icon-circle">
+                  <Music size={24} color="#8d3d2f" />
+                </div>
+                <span className="curvey-dropzone-title">Attach a Song or Audio</span>
+                <span className="curvey-dropzone-hint">
+                  Optional • MP3, M4A, or WAV file
+                </span>
+                <input
+                  id="log-audio"
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioSelect}
+                  className="file-hidden-input"
+                />
+              </label>
+            ) : (
+              <div className="soundtrack-preview-card">
+                <div className="soundtrack-preview-info">
+                  <div className="soundtrack-spinning-disc">
+                    <Disc size={22} color="#8d3d2f" />
+                  </div>
+                  <div className="soundtrack-meta">
+                    <span className="soundtrack-filename">{audioFileName}</span>
+                    <audio
+                      src={audioPreview}
+                      controls
+                      className="soundtrack-mini-player"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="curvey-preview-remove soundtrack-remove-btn"
+                  onClick={handleRemoveAudio}
+                  title="Remove soundtrack"
                 >
                   <X size={16} />
                 </button>
