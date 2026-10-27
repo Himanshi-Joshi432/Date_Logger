@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Date Logger",
+    "slug": "date-logger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#ece3d4",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.singlehq.datelogger"
+    },
+    "android": {
+      "package": "com.singlehq.datelogger",
+      "adaptiveIcon": {
+        "backgroundColor": "#ece3d4",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to attach memories to your date logs.",
+          "cameraPermission": "The app needs access to your camera to take photos for your date logs."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d6ac9c7c-457a-4c9e-8ca6-7dc4c08bf23a"
+      }
+    }
+  }
+}
