@@ -1,31 +1,28 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { postAPI } from "../services/api";
 import {
   Calendar,
-  MapPin,
   Trash2,
   Search,
   Plus,
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
-  FileText,
+  ArrowRight,
   AlertCircle,
   CheckCircle2,
   X,
   History as HistoryIcon,
   Music,
-  Disc,
+  ExternalLink,
 } from "lucide-react";
 
 export function HistoryPage() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedId, setExpandedId] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -55,12 +52,8 @@ export function HistoryPage() {
     };
   }, [token]);
 
-  const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
-
   const handleDelete = async (e, id, venueName) => {
-    e.stopPropagation(); // prevent collapsing/expanding when clicking delete
+    e.stopPropagation(); // prevent navigation when clicking delete
 
     if (
       !window.confirm(
@@ -74,7 +67,6 @@ export function HistoryPage() {
     try {
       await postAPI.deletePost(id, token);
       setPosts((prev) => prev.filter((p) => p._id !== id));
-      if (expandedId === id) setExpandedId(null);
       setActionMsg({
         type: "success",
         text: `Log for "${venueName || "venue"}" deleted.`,
@@ -102,7 +94,7 @@ export function HistoryPage() {
 
   return (
     <div className="curvey-page-container history-scrapbook-canvas">
-      {/* Decorative Scrapbook Elements from Image 2 */}
+      {/* Decorative Scrapbook Elements */}
       <div className="history-vintage-paperclip" aria-hidden="true">
         <div className="silver-clip-wire"></div>
       </div>
@@ -113,7 +105,11 @@ export function HistoryPage() {
         <Link to="/" className="corner-icon-btn" aria-label="Back to dashboard">
           <ArrowLeft size={20} />
         </Link>
-        <Link to="/log" className="corner-icon-btn corner-icon-primary" aria-label="Log a new date">
+        <Link
+          to="/log"
+          className="corner-icon-btn corner-icon-primary"
+          aria-label="Log a new date"
+        >
           <Plus size={22} />
         </Link>
       </div>
@@ -172,7 +168,7 @@ export function HistoryPage() {
         )}
       </div>
 
-      {/* Logs List - Staggered Left & Right matching Image 3 wireframe! */}
+      {/* Logs List - Staggered Left & Right */}
       {isLoading ? (
         <div className="curvey-loading">
           <div className="loading-spinner"></div>
@@ -201,28 +197,51 @@ export function HistoryPage() {
       ) : (
         <div className="curvey-logs-list scrapbook-staggered-list">
           {filteredPosts.map((post, index) => {
-            const isExpanded = expandedId === post._id;
-            const isStaggerRight = index % 2 === 0; // index 0, 2, 4 right, index 1, 3 left (matching Image 3 wireframe)
+            const isStaggerRight = index % 2 === 0;
+            const thumbnail =
+              (post.images && post.images.length > 0
+                ? post.images[0]
+                : post.image) || null;
+            const photoCount =
+              (post.images && post.images.length > 0
+                ? post.images.length
+                : post.image
+                ? 1
+                : 0);
 
             return (
               <div
                 key={post._id}
-                className={`log-item-card ${isStaggerRight ? "stagger-right" : "stagger-left"} ${isExpanded ? "is-expanded" : ""}`}
-                onClick={() => toggleExpand(post._id)}
+                className={`log-item-card ${
+                  isStaggerRight ? "stagger-right" : "stagger-left"
+                }`}
+                onClick={() => navigate(`/history/${post._id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    navigate(`/history/${post._id}`);
+                  }
+                }}
               >
-                {/* Collapsed / Header Summary View */}
+                {/* Collapsed / Summary View */}
                 <div className="log-item-summary">
                   {/* Photo Thumbnail */}
                   <div className="log-thumbnail-wrap">
-                    {post.image ? (
+                    {thumbnail ? (
                       <img
-                        src={post.image}
+                        src={thumbnail}
                         alt={post.venue || "Date thumbnail"}
                         className="log-thumbnail"
                         loading="lazy"
                       />
                     ) : (
                       <div className="log-no-thumbnail">No photo</div>
+                    )}
+                    {photoCount > 1 && (
+                      <span className="log-thumbnail-badge">
+                        +{photoCount}
+                      </span>
                     )}
                   </div>
 
@@ -248,106 +267,40 @@ export function HistoryPage() {
                         </span>
                       </div>
                       {post.music?.audioUrl && (
-                        <div className="log-soundtrack-tag" title="Includes soundtrack">
+                        <div
+                          className="log-soundtrack-tag"
+                          title="Includes soundtrack"
+                        >
                           <Music size={11} />
                           <span>Soundtrack</span>
                         </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Expand Chevron */}
-                  <div className="log-expand-icon" aria-label="Toggle details">
-                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                  </div>
                 </div>
 
-                {/* Expanded Details View */}
-                {isExpanded && (
-                  <div
-                    className="log-expanded-details"
-                    onClick={(e) => e.stopPropagation()} // let clicks inside work
+                {/* Card Action Row: View Details Link & Quick Delete */}
+                <div className="log-card-footer-row">
+                  <Link
+                    to={`/history/${post._id}`}
+                    className="log-view-details-action"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Full Photo */}
-                    {post.image && (
-                      <div className="log-full-photo-wrap">
-                        <img
-                          src={post.image}
-                          alt={post.venue || "Full date photo"}
-                          className="log-full-photo"
-                        />
-                      </div>
-                    )}
+                    <span>View Details</span>
+                    <ArrowRight size={14} />
+                  </Link>
 
-                    {/* Venue & Full Date */}
-                    <div className="log-detail-meta">
-                      <div className="log-detail-row">
-                        <MapPin size={16} color="#8d3d2f" />
-                        <span className="log-detail-venue">
-                          {post.venue || "Unnamed Venue"}
-                        </span>
-                      </div>
-                      <div className="log-detail-row">
-                        <Calendar size={16} color="#8d3d2f" />
-                        <span className="log-detail-date">
-                          {post.date
-                            ? new Date(post.date).toLocaleDateString(undefined, {
-                                weekday: "long",
-                                month: "long",
-                                day: "numeric",
-                                year: "numeric",
-                              })
-                            : "Undated"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Full Description */}
-                    {post.description && (
-                      <div className="log-detail-notes">
-                        <div className="notes-header">
-                          <FileText size={14} color="#8d3d2f" />
-                          <span>Notes & Description</span>
-                        </div>
-                        <p className="notes-text">{post.description}</p>
-                      </div>
-                    )}
-
-                    {/* Memory Soundtrack Player (if post has music) */}
-                    {post.music?.audioUrl && (
-                      <div className="log-detail-soundtrack">
-                        <div className="soundtrack-header">
-                          <Disc size={15} color="#8d3d2f" />
-                          <span>Date Soundtrack</span>
-                        </div>
-                        <audio
-                          controls
-                          src={post.music.audioUrl}
-                          className="scrapbook-audio-player"
-                          preload="metadata"
-                        />
-                      </div>
-                    )}
-
-                    {/* Card Footer: Author & Delete */}
-                    <div className="log-detail-footer">
-                      <span className="log-detail-author">
-                        Preserved by {post.createdBy?.email || "You"}
-                      </span>
-                      <button
-                        type="button"
-                        className="curvey-delete-btn"
-                        onClick={(e) => handleDelete(e, post._id, post.venue)}
-                        disabled={deletingId === post._id}
-                      >
-                        <Trash2 size={14} />
-                        <span>
-                          {deletingId === post._id ? "Deleting..." : "Delete Log"}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    className="log-card-quick-delete"
+                    onClick={(e) => handleDelete(e, post._id, post.venue)}
+                    disabled={deletingId === post._id}
+                    title="Delete log"
+                    aria-label="Delete log"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             );
           })}

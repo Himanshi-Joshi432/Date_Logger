@@ -48,6 +48,7 @@ export const authAPI = {
 
 export const postAPI = {
   getPosts: (token) => apiRequest('/api/post/posts', { token }),
+  getPostById: (id, token) => apiRequest(`/api/post/${id}`, { token }),
   createPost: (formData, token) => apiRequest('/api/post/add', {
     method: 'POST',
     body: formData,

@@ -14,6 +14,8 @@ import {
   Sparkles,
   Music,
   Disc,
+  Plus,
+  Image as ImageIcon,
 } from "lucide-react";
 
 export function LogDatePage() {
@@ -22,11 +24,11 @@ export function LogDatePage() {
 
   const [venue, setVenue] = useState("");
   const [date, setDate] = useState(
-    () => new Date().toISOString().split("T")[0],
+    () => new Date().toISOString().split("T")[0]
   );
   const [description, setDescription] = useState("");
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [audioFile, setAudioFile] = useState(null);
   const [audioFileName, setAudioFileName] = useState("");
   const [audioPreview, setAudioPreview] = useState(null);
@@ -34,31 +36,49 @@ export function LogDatePage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleFilesSelect = (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const validFiles = [];
+    const validPreviews = [];
+
+    for (const file of selectedFiles) {
       if (!file.type.startsWith("image/")) {
-        setErrorMsg("Please select an image file (JPEG, PNG, etc.)");
+        setErrorMsg("Please select image files only (JPEG, PNG, WEBP, etc.)");
         return;
       }
-      setErrorMsg("");
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
+      validFiles.push(file);
+      validPreviews.push(URL.createObjectURL(file));
     }
+
+    setErrorMsg("");
+    setImageFiles((prev) => [...prev, ...validFiles]);
+    setImagePreviews((prev) => [...prev, ...validPreviews]);
+    e.target.value = ""; // Reset input so same files can be re-selected if desired
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-      setImagePreview(null);
+  const handleRemoveImage = (indexToRemove) => {
+    if (imagePreviews[indexToRemove]) {
+      URL.revokeObjectURL(imagePreviews[indexToRemove]);
     }
+    setImageFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setImagePreviews((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleClearAllImages = () => {
+    imagePreviews.forEach((previewUrl) => URL.revokeObjectURL(previewUrl));
+    setImageFiles([]);
+    setImagePreviews([]);
   };
 
   const handleAudioSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith("audio/") && !file.name.match(/\.(mp3|wav|m4a|aac|ogg)$/i)) {
+      if (
+        !file.type.startsWith("audio/") &&
+        !file.name.match(/\.(mp3|wav|m4a|aac|ogg)$/i)
+      ) {
         setErrorMsg("Please select an audio file (MP3, M4A, WAV, etc.)");
         return;
       }
@@ -93,8 +113,8 @@ export function LogDatePage() {
       return;
     }
 
-    if (!imageFile) {
-      setErrorMsg("Please upload a photo for this date.");
+    if (imageFiles.length === 0) {
+      setErrorMsg("Please upload at least one photo for this date.");
       return;
     }
 
@@ -104,9 +124,17 @@ export function LogDatePage() {
     formData.append("venue", venue.trim());
     formData.append("date", date);
     formData.append("description", description.trim());
-    formData.append("image", imageFile);
 
-    // Audio / Soundtrack is completely optional
+    // Append multiple images
+    imageFiles.forEach((file) => {
+      formData.append("images", file);
+    });
+    // Also append the primary image for backwards compatibility
+    if (imageFiles[0]) {
+      formData.append("image", imageFiles[0]);
+    }
+
+    // Audio / Soundtrack is optional
     if (audioFile) {
       formData.append("audio", audioFile);
     }
@@ -117,8 +145,11 @@ export function LogDatePage() {
       setVenue("");
       setDescription("");
       setDate(new Date().toISOString().split("T")[0]);
-      handleRemoveImage();
+      handleClearAllImages();
       handleRemoveAudio();
+      setTimeout(() => {
+        navigate("/history");
+      }, 1200);
     } catch (err) {
       setErrorMsg(err.message || "Failed to save date. Check your network.");
     } finally {
@@ -128,32 +159,31 @@ export function LogDatePage() {
 
   return (
     <div className="curvey-page-container">
-      {/* Top Bar Navigation */}
-      <div className="curvey-nav-row">
-        <Link to="/" className="corner-icon-btn" aria-label="Back to dashboard">
+      {/* Top Header Row */}
+      <div className="history-top-bar" style={{ marginBottom: "16px" }}>
+        <button
+          type="button"
+          className="corner-icon-btn"
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+        >
           <ArrowLeft size={20} />
-        </Link>
+        </button>
       </div>
 
-      <div className="curvey-card deckle-card">
-        {/* Paperclip top decoration from Image 1 */}
-        <div className="card-paperclip" aria-hidden="true">
-          <div className="paperclip-shape"></div>
-        </div>
-        {/* Washi tape decoration */}
-        <div className="card-washi-tape" aria-hidden="true"></div>
-
-        <div className="curvey-card-header">
+      <div className="curvey-card">
+        {/* Header Icon & Title */}
+        <div className="curvey-header">
           <div className="curvey-icon-badge">
-            <Sparkles size={20} color="#8d3d2f" />
+            <Sparkles size={28} />
           </div>
           <h1 className="curvey-title">Log a New Date</h1>
           <p className="curvey-subtitle">
-            Preserve your cherished moments in this memory journal
+            Preserve multiple photos, notes, and music for your special memory
           </p>
         </div>
 
-        {/* Feedback alerts */}
+        {/* Error Alert */}
         {errorMsg && (
           <div className="curvey-alert curvey-alert-error" role="alert">
             <AlertCircle size={18} />
@@ -161,21 +191,11 @@ export function LogDatePage() {
           </div>
         )}
 
+        {/* Success Alert */}
         {successMsg && (
-          <div className="curvey-alert curvey-alert-success" role="alert">
+          <div className="curvey-alert curvey-alert-success" role="status">
             <CheckCircle2 size={18} />
-            <div style={{ flex: 1 }}>
-              <span>{successMsg}</span>
-              <div style={{ marginTop: "6px" }}>
-                <button
-                  type="button"
-                  className="curvey-alert-link"
-                  onClick={() => navigate("/history")}
-                >
-                  View in History &rarr;
-                </button>
-              </div>
-            </div>
+            <span>{successMsg}</span>
           </div>
         )}
 
@@ -229,90 +249,136 @@ export function LogDatePage() {
             </div>
           </div>
 
-          {/* Photo Dropzone */}
+          {/* Multiple Photos Dropzone */}
           <div className="curvey-form-group">
-            <label htmlFor="log-photo">Date Photo</label>
-            {!imagePreview ? (
-              <label className="curvey-dropzone" htmlFor="log-photo">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "6px",
+              }}
+            >
+              <label htmlFor="log-photos" style={{ marginBottom: 0 }}>
+                Date Photos ({imageFiles.length})
+              </label>
+              {imageFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllImages}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--color-danger)",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            {/* If no images chosen yet, show full dropzone */}
+            {imagePreviews.length === 0 ? (
+              <label className="curvey-dropzone" htmlFor="log-photos">
                 <div className="dropzone-circle">
                   <UploadCloud size={28} color="#8d3d2f" />
                 </div>
-                <span className="curvey-dropzone-title">Upload a Photo</span>
+                <span className="curvey-dropzone-title">Upload Photos</span>
                 <span className="curvey-dropzone-hint">
-                  Tap to choose from gallery
+                  Select one or multiple photos from gallery
                 </span>
                 <input
-                  id="log-photo"
+                  id="log-photos"
                   type="file"
+                  multiple
                   accept="image/*"
-                  onChange={handleFileSelect}
+                  onChange={handleFilesSelect}
                   className="file-hidden-input"
                   required
                 />
               </label>
             ) : (
-              <div className="curvey-preview-card">
-                <img
-                  src={imagePreview}
-                  alt="Selected preview"
-                  className="curvey-preview-img"
-                />
-                <button
-                  type="button"
-                  className="curvey-preview-remove"
-                  onClick={handleRemoveImage}
-                  title="Remove photo"
-                >
-                  <X size={16} />
-                </button>
+              <div className="multi-photo-preview-grid">
+                {imagePreviews.map((previewUrl, idx) => (
+                  <div key={idx} className="multi-photo-thumb-wrap">
+                    <img
+                      src={previewUrl}
+                      alt={`Selected preview ${idx + 1}`}
+                      className="multi-photo-thumb-img"
+                    />
+                    <button
+                      type="button"
+                      className="multi-photo-remove-btn"
+                      onClick={() => handleRemoveImage(idx)}
+                      title="Remove this photo"
+                      aria-label="Remove photo"
+                    >
+                      <X size={13} />
+                    </button>
+                    {idx === 0 && (
+                      <span className="multi-photo-cover-badge">Cover</span>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add more photos button */}
+                <label className="multi-photo-add-more" htmlFor="log-photos-more">
+                  <Plus size={20} color="#8d3d2f" />
+                  <span>Add More</span>
+                  <input
+                    id="log-photos-more"
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleFilesSelect}
+                    className="file-hidden-input"
+                  />
+                </label>
               </div>
             )}
           </div>
 
-          {/* Soundtrack / Music (Optional) */}
+          {/* Optional Audio / Soundtrack Upload */}
           <div className="curvey-form-group">
-            <div className="soundtrack-label-row">
-              <label htmlFor="log-audio">Date Soundtrack</label>
-              <span className="optional-tag">Optional</span>
-            </div>
-
+            <label htmlFor="log-audio">Date Soundtrack (Optional)</label>
             {!audioPreview ? (
-              <label className="curvey-dropzone soundtrack-dropzone" htmlFor="log-audio">
-                <div className="dropzone-circle soundtrack-icon-circle">
+              <label className="curvey-dropzone audio-dropzone" htmlFor="log-audio">
+                <div className="dropzone-circle audio-circle">
                   <Music size={24} color="#8d3d2f" />
                 </div>
-                <span className="curvey-dropzone-title">Attach a Song or Audio</span>
+                <span className="curvey-dropzone-title">Add Background Song</span>
                 <span className="curvey-dropzone-hint">
-                  Optional • MP3, M4A, or WAV file
+                  Upload audio clip (MP3, M4A, etc.)
                 </span>
                 <input
                   id="log-audio"
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,.mp3,.m4a,.wav"
                   onChange={handleAudioSelect}
                   className="file-hidden-input"
                 />
               </label>
             ) : (
-              <div className="soundtrack-preview-card">
-                <div className="soundtrack-preview-info">
-                  <div className="soundtrack-spinning-disc">
-                    <Disc size={22} color="#8d3d2f" />
-                  </div>
-                  <div className="soundtrack-meta">
-                    <span className="soundtrack-filename">{audioFileName}</span>
-                    <audio
-                      src={audioPreview}
-                      controls
-                      className="soundtrack-mini-player"
-                    />
-                  </div>
+              <div className="curvey-audio-preview-card">
+                <div className="audio-card-info">
+                  <Disc size={20} color="#8d3d2f" className="spinning-disc-icon" />
+                  <span className="audio-card-name" title={audioFileName}>
+                    {audioFileName || "Attached soundtrack"}
+                  </span>
                 </div>
+                <audio
+                  controls
+                  src={audioPreview}
+                  className="scrapbook-audio-player mini-player"
+                />
                 <button
                   type="button"
-                  className="curvey-preview-remove soundtrack-remove-btn"
+                  className="curvey-preview-remove audio-remove-btn"
                   onClick={handleRemoveAudio}
-                  title="Remove soundtrack"
+                  aria-label="Remove soundtrack"
                 >
                   <X size={16} />
                 </button>
@@ -320,13 +386,23 @@ export function LogDatePage() {
             )}
           </div>
 
-          {/* Submit */}
+          {/* Submit Button */}
           <button
             type="submit"
+            disabled={isSubmitting}
             className="curvey-btn-submit"
-            disabled={isSubmitting || !venue || !date || !imageFile}
           >
-            {isSubmitting ? "Saving & Uploading..." : "Save Date Log"}
+            {isSubmitting ? (
+              <>
+                <div className="btn-spinner"></div>
+                <span>Saving Memory...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={18} />
+                <span>Save Date Memory</span>
+              </>
+            )}
           </button>
         </form>
       </div>

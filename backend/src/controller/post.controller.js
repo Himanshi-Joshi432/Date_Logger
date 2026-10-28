@@ -32,16 +32,45 @@ async function createPost(req, res) {
     }
 
     try {
-        const imageFile = req.files?.image?.[0] || req.file;
+        // Collect all uploaded image files from 'images', 'image', or single 'file'
+        const imageFiles = [
+            ...(req.files?.images || []),
+            ...(req.files?.image || []),
+            ...(req.file ? [req.file] : [])
+        ];
         const audioFile = req.files?.audio?.[0] || req.files?.music?.[0];
 
-        if (!imageFile) {
+        // Also accept existing image URLs passed in req.body
+        let directImageUrls = [];
+        if (req.body.images) {
+            if (Array.isArray(req.body.images)) {
+                directImageUrls = req.body.images;
+            } else if (typeof req.body.images === "string") {
+                try {
+                    const parsed = JSON.parse(req.body.images);
+                    if (Array.isArray(parsed)) directImageUrls = parsed;
+                    else directImageUrls = [req.body.images];
+                } catch {
+                    directImageUrls = [req.body.images];
+                }
+            }
+        } else if (req.body.image && typeof req.body.image === "string" && req.body.image.startsWith("http")) {
+            directImageUrls = [req.body.image];
+        }
+
+        if (imageFiles.length === 0 && directImageUrls.length === 0) {
             return res.status(400).json({
-                message: "Image is required"
+                message: "At least one image is required"
             });
         }
 
-        const imageResult = await uploadImage(imageFile);
+        // Upload all image files concurrently
+        const uploadPromises = imageFiles.map((file) => uploadImage(file));
+        const uploadResults = await Promise.all(uploadPromises);
+        const uploadedUrls = uploadResults.map((r) => r.url);
+
+        const allImageUrls = [...uploadedUrls, ...directImageUrls];
+
         const { venue, date, description } = req.body;
 
         let music = undefined;
@@ -61,7 +90,8 @@ async function createPost(req, res) {
         }
 
         const post = await postModel.create({
-            image: imageResult.url,
+            images: allImageUrls,
+            image: allImageUrls[0] || "",
             venue,
             description,
             date,
@@ -93,15 +123,57 @@ async function getPosts(req, res) {
     }
 
     try {
-        const posts = await postModel.find().populate("createdBy", "email");
+        const posts = await postModel.find().populate("createdBy", "email").sort({ date: -1, _id: -1 });
+        const formattedPosts = posts.map((post) => {
+            const p = post.toObject ? post.toObject() : { ...post };
+            if (!p.images || p.images.length === 0) {
+                p.images = p.image ? [p.image] : [];
+            }
+            return p;
+        });
+
         return res.status(200).json({
             message: "posts fetched successfully",
-            posts
+            posts: formattedPosts
         });
     } catch (error) {
         console.error("Error fetching posts:", error);
         return res.status(500).json({
             message: "Error fetching posts",
+            error: error.message
+        });
+    }
+}
+
+async function getPostById(req, res) {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+        return res.status(401).json({
+            message: "Unauthorized"
+        });
+    }
+
+    try {
+        const post = await postModel.findById(req.params.id).populate("createdBy", "email");
+        if (!post) {
+            return res.status(404).json({
+                message: "Date log not found"
+            });
+        }
+
+        const p = post.toObject ? post.toObject() : { ...post };
+        if (!p.images || p.images.length === 0) {
+            p.images = p.image ? [p.image] : [];
+        }
+
+        return res.status(200).json({
+            message: "post fetched successfully",
+            post: p
+        });
+    } catch (error) {
+        console.error("Error fetching post:", error);
+        return res.status(500).json({
+            message: "Error fetching post",
             error: error.message
         });
     }
@@ -133,7 +205,6 @@ async function deletePost(req, res) {
 module.exports = {
     createPost,
     getPosts,
+    getPostById,
     deletePost
 };
-
-

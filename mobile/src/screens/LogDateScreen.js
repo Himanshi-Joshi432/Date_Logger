@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Camera,
   Image as ImageIcon,
+  Plus,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { postAPI } from '../services/api';
@@ -37,7 +38,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [description, setDescription] = useState('');
-  const [imageFile, setImageFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -50,7 +51,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     }
   };
 
-  // Launch gallery picker
+  // Launch gallery picker with multiple selection
   const pickFromGallery = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -61,17 +62,17 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsMultipleSelection: true,
         quality: 0.85,
       });
 
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setImageFile({
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const newImages = result.assets.map((asset, idx) => ({
           uri: asset.uri,
-          name: asset.fileName || 'date-memory.jpg',
+          name: asset.fileName || `date-memory-${Date.now()}-${idx}.jpg`,
           type: asset.mimeType || 'image/jpeg',
-        });
+        }));
+        setImageFiles((prev) => [...prev, ...newImages]);
         setErrorMsg('');
       }
     } catch (err) {
@@ -95,11 +96,14 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        setImageFile({
-          uri: asset.uri,
-          name: asset.fileName || 'camera-capture.jpg',
-          type: asset.mimeType || 'image/jpeg',
-        });
+        setImageFiles((prev) => [
+          ...prev,
+          {
+            uri: asset.uri,
+            name: asset.fileName || `camera-${Date.now()}.jpg`,
+            type: asset.mimeType || 'image/jpeg',
+          },
+        ]);
         setErrorMsg('');
       }
     } catch (err) {
@@ -107,8 +111,8 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     }
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
+  const handleRemoveImage = (indexToRemove) => {
+    setImageFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSubmit = async () => {
@@ -120,8 +124,8 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       return;
     }
 
-    if (!imageFile) {
-      setErrorMsg('Please upload a photo for this date memory.');
+    if (imageFiles.length === 0) {
+      setErrorMsg('Please upload at least one photo for this date memory.');
       return;
     }
 
@@ -134,11 +138,23 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       formData.append('date', dateString);
       formData.append('description', description.trim());
 
-      formData.append('image', {
-        uri: imageFile.uri,
-        name: imageFile.name || 'photo.jpg',
-        type: imageFile.type || 'image/jpeg',
+      // Append multiple images
+      imageFiles.forEach((img) => {
+        formData.append('images', {
+          uri: img.uri,
+          name: img.name || 'photo.jpg',
+          type: img.type || 'image/jpeg',
+        });
       });
+
+      // Backward compatible primary image
+      if (imageFiles[0]) {
+        formData.append('image', {
+          uri: imageFiles[0].uri,
+          name: imageFiles[0].name || 'photo.jpg',
+          type: imageFiles[0].type || 'image/jpeg',
+        });
+      }
 
       await postAPI.createPost(formData, token);
 
@@ -146,7 +162,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       setVenue('');
       setDescription('');
       setSelectedDate(new Date());
-      setImageFile(null);
+      setImageFiles([]);
 
       if (onLogSaved) {
         setTimeout(() => {
@@ -171,9 +187,8 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
     >
-      {/* Top Nav Row */}
+      {/* Top Header Navigation */}
       <View style={styles.topNav}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -182,42 +197,33 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
         >
           <ArrowLeft size={18} color={colors.textDark} />
         </TouchableOpacity>
-        <Text style={styles.navTitle}>New Memory</Text>
+        <Text style={styles.navTitle}>New Date Memory</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      {/* Main Deckle Form Card */}
+      {/* Main Journal Card */}
       <View style={styles.card}>
-        {/* Paperclip top decoration */}
-        <View style={styles.paperclipWrapper}>
-          <View style={styles.paperclipInner} />
-        </View>
-
-        {/* Washi tape decoration */}
-        <View style={styles.washiTape} />
-
-        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.iconBadge}>
-            <Sparkles size={20} color={colors.primary} />
+          <View style={styles.sparkleBadge}>
+            <Sparkles size={24} color={colors.primary} />
           </View>
-          <Text style={styles.title}>Log a New Date</Text>
+          <Text style={styles.title}>Document a Moment</Text>
           <Text style={styles.subtitle}>
-            Record the special details of your time together
+            Preserve multiple photos and notes of your favorite times
           </Text>
         </View>
 
-        {/* Alerts */}
+        {/* Feedback Alerts */}
         {errorMsg ? (
           <View style={styles.alertError}>
-            <AlertCircle size={18} color={colors.danger} />
+            <AlertCircle size={16} color={colors.danger} />
             <Text style={styles.alertErrorText}>{errorMsg}</Text>
           </View>
         ) : null}
 
         {successMsg ? (
           <View style={styles.alertSuccess}>
-            <CheckCircle2 size={18} color={colors.success} />
+            <CheckCircle2 size={16} color={colors.success} />
             <Text style={styles.alertSuccessText}>{successMsg}</Text>
           </View>
         ) : null}
@@ -225,11 +231,11 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
         {/* Venue Field */}
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Venue / Place</Text>
-          <View style={styles.inputRow}>
-            <MapPin size={18} color={colors.textSubtle} style={styles.inputIcon} />
+          <View style={styles.inputWrap}>
+            <MapPin size={18} color={colors.primary} style={styles.inputIcon} />
             <TextInput
-              style={styles.textInput}
-              placeholder="e.g. Little Italy Cafe, Central Park..."
+              style={styles.input}
+              placeholder="e.g. Skyline Rooftop Cafe"
               placeholderTextColor={colors.textMuted}
               value={venue}
               onChangeText={setVenue}
@@ -241,12 +247,12 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Date</Text>
           <TouchableOpacity
-            style={styles.inputRow}
+            style={styles.inputWrap}
             onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
-            <CalendarIcon size={18} color={colors.textSubtle} style={styles.inputIcon} />
-            <Text style={styles.datePickerText}>{formattedDate}</Text>
+            <CalendarIcon size={18} color={colors.primary} style={styles.inputIcon} />
+            <Text style={styles.dateValueText}>{formattedDate}</Text>
           </TouchableOpacity>
 
           {showDatePicker && (
@@ -262,16 +268,16 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
 
         {/* Description Field */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Description / Memory Notes</Text>
-          <View style={[styles.inputRow, styles.textAreaRow]}>
+          <Text style={styles.label}>Description / Notes</Text>
+          <View style={[styles.inputWrap, styles.textAreaWrap]}>
             <FileText
               size={18}
-              color={colors.textSubtle}
-              style={[styles.inputIcon, { alignSelf: 'flex-start', marginTop: 12 }]}
+              color={colors.primary}
+              style={[styles.inputIcon, { marginTop: 4 }]}
             />
             <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="What made this date unforgettable? Favorite moments, funny talks, food you tried..."
+              style={[styles.input, styles.textArea]}
+              placeholder="What made this date special? Favorite food, funny moments..."
               placeholderTextColor={colors.textMuted}
               multiline
               numberOfLines={4}
@@ -282,20 +288,52 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
           </View>
         </View>
 
-        {/* Photo Upload Field */}
+        {/* Multiple Photos Upload Field */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Memory Photo</Text>
-
-          {imageFile ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri: imageFile.uri }} style={styles.previewImage} />
-              <TouchableOpacity
-                style={styles.removeImageBtn}
-                onPress={handleRemoveImage}
-                activeOpacity={0.8}
-              >
-                <X size={16} color="#ffffff" />
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Memory Photos ({imageFiles.length})</Text>
+            {imageFiles.length > 0 && (
+              <TouchableOpacity onPress={() => setImageFiles([])}>
+                <Text style={styles.clearAllText}>Clear all</Text>
               </TouchableOpacity>
+            )}
+          </View>
+
+          {imageFiles.length > 0 ? (
+            <View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.previewsRow}
+              >
+                {imageFiles.map((img, idx) => (
+                  <View key={idx} style={styles.previewThumbWrap}>
+                    <Image source={{ uri: img.uri }} style={styles.previewThumb} />
+                    <TouchableOpacity
+                      style={styles.removeImageBtn}
+                      onPress={() => handleRemoveImage(idx)}
+                      activeOpacity={0.8}
+                    >
+                      <X size={12} color="#ffffff" />
+                    </TouchableOpacity>
+                    {idx === 0 && (
+                      <View style={styles.coverBadge}>
+                        <Text style={styles.coverBadgeText}>Cover</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+
+                {/* Add more button */}
+                <TouchableOpacity
+                  style={styles.addMoreBtn}
+                  onPress={pickFromGallery}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={20} color={colors.primary} />
+                  <Text style={styles.addMoreText}>Add</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           ) : (
             <View style={styles.uploadOptions}>
@@ -358,237 +396,246 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: colors.textDark,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: colors.cardBorder,
-    padding: 22,
-    paddingTop: 26,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: colors.cardBorder,
-    shadowOffset: { width: 3, height: 6 },
+    shadowOffset: { width: 3, height: 5 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 4,
-    position: 'relative',
-  },
-  paperclipWrapper: {
-    position: 'absolute',
-    top: -12,
-    right: 28,
-    width: 20,
-    height: 42,
-    borderRadius: 10,
-    borderWidth: 2.5,
-    borderColor: colors.antiqueBrass,
-    backgroundColor: 'transparent',
-    zIndex: 10,
-  },
-  paperclipInner: {
-    position: 'absolute',
-    top: 5,
-    left: 3,
-    width: 10,
-    height: 26,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: colors.antiqueBrass,
-  },
-  washiTape: {
-    position: 'absolute',
-    top: -8,
-    left: '28%',
-    width: 85,
-    height: 18,
-    backgroundColor: colors.washiTape,
-    borderRadius: 2,
-    transform: [{ rotate: '-2deg' }],
-    borderWidth: 1,
-    borderColor: 'rgba(216, 190, 155, 0.4)',
-    zIndex: 5,
   },
   header: {
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 18,
   },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sparkleBadge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: colors.primaryLight,
     borderWidth: 1.5,
     borderColor: 'rgba(141, 61, 47, 0.25)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 10,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: colors.textDark,
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: colors.textSubtle,
     textAlign: 'center',
+    lineHeight: 17,
   },
   alertError: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.dangerBg,
-    borderColor: colors.dangerBorder,
+    backgroundColor: '#fff5f4',
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    borderColor: 'rgba(156, 46, 36, 0.3)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
     gap: 8,
   },
   alertErrorText: {
-    color: colors.danger,
-    fontSize: 13,
     flex: 1,
+    fontSize: 12.5,
+    color: colors.danger,
+    fontWeight: '500',
   },
   alertSuccess: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.successBg,
-    borderColor: colors.successBorder,
+    backgroundColor: '#f2f7f3',
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
+    borderColor: 'rgba(55, 99, 66, 0.3)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
     gap: 8,
   },
   alertSuccessText: {
-    color: colors.success,
-    fontSize: 13,
-    fontWeight: '600',
     flex: 1,
+    fontSize: 12.5,
+    color: colors.success,
+    fontWeight: '600',
   },
   fieldGroup: {
     marginBottom: 16,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMedium,
-    marginBottom: 7,
-  },
-  inputRow: {
+  labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceSubtle,
-    borderRadius: 12,
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textDark,
+    marginBottom: 6,
+  },
+  clearAllText: {
+    fontSize: 11.5,
+    color: colors.danger,
+    textDecorationLine: 'underline',
+  },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fdfbf7',
     borderWidth: 1.5,
     borderColor: colors.borderSubtle,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    height: 48,
+    minHeight: 46,
+  },
+  textAreaWrap: {
+    alignItems: 'flex-start',
+    paddingVertical: 10,
   },
   inputIcon: {
     marginRight: 10,
   },
-  textInput: {
+  input: {
     flex: 1,
     fontSize: 14,
     color: colors.textDark,
-  },
-  datePickerText: {
-    fontSize: 14,
-    color: colors.textDark,
-  },
-  textAreaRow: {
-    height: 100,
-    alignItems: 'flex-start',
-    paddingVertical: 4,
+    padding: 0,
   },
   textArea: {
-    height: '100%',
-    paddingTop: 8,
+    height: 72,
+  },
+  dateValueText: {
+    fontSize: 14,
+    color: colors.textDark,
+    fontWeight: '500',
   },
   uploadOptions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   uploadOptionBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.surfaceSubtle,
     borderWidth: 1.5,
-    borderStyle: 'dashed',
     borderColor: colors.borderActive,
+    borderStyle: 'dashed',
     borderRadius: 12,
-    paddingVertical: 16,
-    gap: 8,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   uploadOptionText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12.5,
+    fontWeight: '700',
     color: colors.primary,
   },
-  previewContainer: {
-    borderRadius: 14,
+  previewsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  previewThumbWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: colors.cardBorder,
+    borderColor: colors.borderSubtle,
     overflow: 'hidden',
     position: 'relative',
-    height: 200,
-    backgroundColor: '#000',
+    backgroundColor: '#f7f2eb',
   },
-  previewImage: {
+  previewThumb: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   removeImageBtn: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
+    top: 3,
+    right: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(38, 31, 24, 0.82)',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverBadge: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    backgroundColor: colors.primary,
+    paddingVertical: 1,
+    paddingHorizontal: 4,
+    borderRadius: 3,
+  },
+  coverBadgeText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '700',
+  },
+  addMoreBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  addMoreText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
   },
   submitBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 6,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 3,
   },
   submitBtnDisabled: {
-    opacity: 0.65,
+    opacity: 0.7,
   },
   submitBtnText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
-

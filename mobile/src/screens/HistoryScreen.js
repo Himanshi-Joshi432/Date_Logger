@@ -10,31 +10,30 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 import {
   Calendar,
   Trash2,
   Search,
   Plus,
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
+  ArrowRight,
   X,
   History as HistoryIcon,
   Play,
   Pause,
   Music,
+  Eye,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { postAPI } from '../services/api';
 import { colors } from '../theme/colors';
 
-export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
+export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) {
   const { token } = useAuth();
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   // Audio playback state
@@ -58,14 +57,11 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
 
     return () => {
       if (sound) {
-        sound.unloadAsync();
+        sound.pause();
+        sound.release();
       }
     };
   }, [token]);
-
-  const toggleExpand = (id) => {
-    setExpandedId((prev) => (prev === id ? null : id));
-  };
 
   const handleDelete = (id, venueName) => {
     Alert.alert(
@@ -81,7 +77,6 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
             try {
               await postAPI.deletePost(id, token);
               setPosts((prev) => prev.filter((p) => p._id !== id));
-              if (expandedId === id) setExpandedId(null);
             } catch (err) {
               Alert.alert('Error', err.message || 'Failed to delete date log');
             } finally {
@@ -99,23 +94,22 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
 
     try {
       if (playingPostId === postId && sound) {
-        await sound.pauseAsync();
+        sound.pause();
         setPlayingPostId(null);
         return;
       }
 
       if (sound) {
-        await sound.unloadAsync();
+        sound.pause();
+        sound.release();
       }
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
+      const player = createAudioPlayer(audioUrl);
+      player.play();
+      setSound(player);
       setPlayingPostId(postId);
 
-      newSound.setOnPlaybackStatusUpdate((status) => {
+      player.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish) {
           setPlayingPostId(null);
         }
@@ -135,9 +129,12 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
   });
 
   const renderPostItem = ({ item, index }) => {
-    const isExpanded = expandedId === item._id;
     const isStaggerRight = index % 2 === 0;
     const isAudioPlaying = playingPostId === item._id;
+    const thumbnail =
+      (item.images && item.images.length > 0 ? item.images[0] : item.image) || null;
+    const photoCount =
+      (item.images && item.images.length > 0 ? item.images.length : item.image ? 1 : 0);
 
     const formattedDate = item.date
       ? new Date(item.date).toLocaleDateString(undefined, {
@@ -152,22 +149,26 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
         style={[
           styles.postCard,
           isStaggerRight ? styles.staggerRight : styles.staggerLeft,
-          isExpanded && styles.postCardExpanded,
         ]}
       >
-        {/* Card Header clickable row */}
+        {/* Card Header clickable row -> expands to full page details */}
         <TouchableOpacity
           style={styles.cardHeaderRow}
-          onPress={() => toggleExpand(item._id)}
-          activeOpacity={0.85}
+          onPress={() => onViewDetails && onViewDetails(item)}
+          activeOpacity={0.8}
         >
           {/* Thumbnail */}
           <View style={styles.thumbnailWrap}>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.thumbnail} />
+            {thumbnail ? (
+              <Image source={{ uri: thumbnail }} style={styles.thumbnail} />
             ) : (
               <View style={styles.noThumbnail}>
                 <Text style={styles.noThumbnailText}>No photo</Text>
+              </View>
+            )}
+            {photoCount > 1 && (
+              <View style={styles.photoCountBadge}>
+                <Text style={styles.photoCountText}>+{photoCount}</Text>
               </View>
             )}
           </View>
@@ -179,7 +180,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
             </Text>
 
             {item.description ? (
-              <Text style={styles.descPreview} numberOfLines={isExpanded ? 0 : 2}>
+              <Text style={styles.descPreview} numberOfLines={2}>
                 {item.description}
               </Text>
             ) : null}
@@ -194,7 +195,6 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
                 <TouchableOpacity
                   style={[styles.audioTag, isAudioPlaying && styles.audioTagPlaying]}
                   onPress={(e) => {
-                    e.stopPropagation();
                     handleToggleAudio(item._id, item.music.audioUrl);
                   }}
                 >
@@ -215,42 +215,31 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog }) {
               ) : null}
             </View>
           </View>
-
-          {/* Chevron */}
-          <View style={styles.chevronWrap}>
-            {isExpanded ? (
-              <ChevronUp size={18} color={colors.textSubtle} />
-            ) : (
-              <ChevronDown size={18} color={colors.textSubtle} />
-            )}
-          </View>
         </TouchableOpacity>
 
-        {/* Expanded View with Full Photo & Actions */}
-        {isExpanded ? (
-          <View style={styles.expandedContent}>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.expandedImage} />
-            ) : null}
+        {/* Card Footer: View Details Action & Quick Delete */}
+        <View style={styles.cardFooterRow}>
+          <TouchableOpacity
+            style={styles.viewDetailsBtn}
+            onPress={() => onViewDetails && onViewDetails(item)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.viewDetailsBtnText}>View Details</Text>
+            <ArrowRight size={13} color="#ffffff" />
+          </TouchableOpacity>
 
-            <View style={styles.cardActionsRow}>
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => handleDelete(item._id, item.venue)}
-                disabled={deletingId === item._id}
-              >
-                {deletingId === item._id ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
-                ) : (
-                  <>
-                    <Trash2 size={16} color={colors.danger} />
-                    <Text style={styles.deleteBtnText}>Delete Memory</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
+          <TouchableOpacity
+            style={styles.quickDeleteBtn}
+            onPress={() => handleDelete(item._id, item.venue)}
+            disabled={deletingId === item._id}
+          >
+            {deletingId === item._id ? (
+              <ActivityIndicator size="small" color={colors.danger} />
+            ) : (
+              <Trash2 size={15} color={colors.danger} />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -353,97 +342,161 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textDark,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: 12,
-    height: 44,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     marginBottom: 16,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
     color: colors.textDark,
+    padding: 0,
+  },
+  centerBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: colors.textSubtle,
+  },
+  emptyCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.textDark,
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 13.5,
+    color: colors.textSubtle,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+  },
+  emptyBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   listContent: {
     paddingBottom: 40,
   },
   postCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    borderWidth: 1.5,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
     borderColor: colors.cardBorder,
+    borderRadius: 16,
     marginBottom: 14,
     overflow: 'hidden',
     shadowColor: colors.cardBorder,
     shadowOffset: { width: 2, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.14,
     shadowRadius: 6,
     elevation: 3,
   },
   staggerRight: {
-    marginLeft: 6,
+    marginLeft: 10,
+    marginRight: 2,
+    transform: [{ rotate: '0.6deg' }],
   },
   staggerLeft: {
-    marginRight: 6,
-  },
-  postCardExpanded: {
-    borderColor: colors.primary,
+    marginLeft: 2,
+    marginRight: 10,
+    transform: [{ rotate: '-0.6deg' }],
   },
   cardHeaderRow: {
     flexDirection: 'row',
     padding: 12,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   thumbnailWrap: {
-    width: 60,
-    height: 60,
+    width: 72,
+    height: 72,
     borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.borderSubtle,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceSubtle,
-    marginRight: 12,
+    backgroundColor: '#f7f2eb',
+    position: 'relative',
   },
   thumbnail: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   noThumbnail: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   noThumbnailText: {
     fontSize: 10,
-    color: colors.textMuted,
+    color: colors.textSubtle,
+  },
+  photoCountBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(38, 31, 24, 0.82)',
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+  },
+  photoCountText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '700',
   },
   cardHeaderDetails: {
     flex: 1,
-    marginRight: 8,
+    marginLeft: 12,
   },
   venueTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.textDark,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   descPreview: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: colors.textSubtle,
     lineHeight: 16,
     marginBottom: 6,
@@ -451,14 +504,15 @@ const styles = StyleSheet.create({
   tagsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   dateTag: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceSubtle,
-    paddingHorizontal: 8,
     paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
     gap: 4,
   },
@@ -471,8 +525,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primaryLight,
-    paddingHorizontal: 8,
     paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: 6,
     gap: 4,
   },
@@ -482,89 +536,35 @@ const styles = StyleSheet.create({
   audioTagText: {
     fontSize: 11,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  chevronWrap: {
-    padding: 4,
-  },
-  expandedContent: {
-    padding: 12,
-    paddingTop: 0,
+  cardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
-    marginTop: 6,
+    borderStyle: 'dashed',
+    backgroundColor: '#faf6ef',
   },
-  expandedImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 12,
-    marginTop: 10,
-    resizeMode: 'cover',
-  },
-  cardActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 12,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.dangerBg,
-    gap: 6,
-  },
-  deleteBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.danger,
-  },
-  centerBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.textSubtle,
-  },
-  emptyCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textDark,
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: colors.textSubtle,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  emptyBtn: {
+  viewDetailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    gap: 4,
   },
-  emptyBtnText: {
+  viewDetailsBtnText: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  quickDeleteBtn: {
+    padding: 6,
+    borderRadius: 999,
   },
 });
-

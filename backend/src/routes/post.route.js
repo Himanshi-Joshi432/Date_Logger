@@ -7,7 +7,8 @@ router.post(
     '/add',
     authMiddleware,
     upload.fields([
-        { name: 'image', maxCount: 1 },
+        { name: 'images', maxCount: 15 },
+        { name: 'image', maxCount: 15 },
         { name: 'audio', maxCount: 1 },
         { name: 'music', maxCount: 1 }
     ]),
@@ -15,7 +16,6 @@ router.post(
 );
 router.delete('/delete/:id', authMiddleware, postController.deletePost);
 router.get('/posts', authMiddleware, postController.getPosts);
+router.get('/:id', authMiddleware, postController.getPostById);
 
 module.exports = router;
-
-

@@ -10,6 +10,7 @@ import { RegisterScreen } from './src/screens/RegisterScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { LogDateScreen } from './src/screens/LogDateScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
+import { DateDetailsScreen } from './src/screens/DateDetailsScreen';
 import { colors } from './src/theme/colors';
 
 function MainApp() {
@@ -17,7 +18,9 @@ function MainApp() {
 
   // Navigation states
   const [authScreen, setAuthScreen] = useState('login'); // 'login' | 'register'
-  const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'log' | 'history'
+  const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'log' | 'history' | 'details'
+  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
 
   // Initializing splash
   if (isInitializing) {
@@ -42,6 +45,15 @@ function MainApp() {
 
   // Authenticated stack
   switch (currentScreen) {
+    case 'details':
+      return (
+        <DateDetailsScreen
+          postId={selectedPostId}
+          initialPost={selectedPost}
+          onNavigateBack={() => setCurrentScreen('history')}
+          onDeleteSuccess={() => setCurrentScreen('history')}
+        />
+      );
     case 'log':
       return (
         <LogDateScreen
@@ -54,6 +66,11 @@ function MainApp() {
         <HistoryScreen
           onNavigateBack={() => setCurrentScreen('dashboard')}
           onNavigateLog={() => setCurrentScreen('log')}
+          onViewDetails={(post) => {
+            setSelectedPostId(post._id);
+            setSelectedPost(post);
+            setCurrentScreen('details');
+          }}
         />
       );
     case 'dashboard':
@@ -98,14 +115,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     borderWidth: 2,
     borderColor: 'rgba(141, 61, 47, 0.3)',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
   splashTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.textDark,
-    letterSpacing: 0.5,
   },
 });

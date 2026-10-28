@@ -7,6 +7,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LogDatePage } from './pages/LogDatePage';
 import { HistoryPage } from './pages/HistoryPage';
+import { DateDetailsPage } from './pages/DateDetailsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import './App.css';
 
@@ -44,6 +45,8 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/log" element={<LogDatePage />} />
             <Route path="/history" element={<HistoryPage />} />
+            <Route path="/history/:id" element={<DateDetailsPage />} />
+            <Route path="/details/:id" element={<DateDetailsPage />} />
           </Route>
 
           {/* Fallback 404 */}
