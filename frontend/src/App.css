@@ -247,10 +247,12 @@ body {
   padding: 4px 0 16px 0;
   box-sizing: border-box;
   min-height: 0;
+  width: 100%;
 }
 
 .dashboard-scrapbook {
   position: relative;
+  width: 100%;
 }
 
 /* Central Torn Deckle Scrapbook Card */
@@ -266,7 +268,9 @@ body {
   box-shadow: 0 8px 24px rgba(44, 36, 29, 0.12), 0 2px 6px rgba(44, 36, 29, 0.08);
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 20px;
+  width: 100%;
   flex: 1;
 }
 

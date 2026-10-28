@@ -18,8 +18,9 @@ export function DashboardScreen({ onNavigateLog, onNavigateHistory }) {
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      bounces={false}
     >
-      {/* Top Bar with Logout */}
+      {/* Top Bar with Brand & Logout */}
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
           <Heart size={18} color={colors.primary} fill={colors.primary} />
@@ -30,12 +31,12 @@ export function DashboardScreen({ onNavigateLog, onNavigateHistory }) {
           onPress={logout}
           activeOpacity={0.7}
         >
-          <LogOut size={16} color={colors.textSubtle} />
+          <LogOut size={15} color={colors.textSubtle} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Main Journal Deckle Card */}
+      {/* Main Full-Screen Dynamic Card */}
       <View style={styles.mainCard}>
         {/* Paperclip top decoration */}
         <View style={styles.paperclipWrapper}>
@@ -45,10 +46,10 @@ export function DashboardScreen({ onNavigateLog, onNavigateHistory }) {
         {/* Washi tape decoration */}
         <View style={styles.washiTape} />
 
-        {/* Minimal Greeting Header */}
+        {/* Greeting Header */}
         <View style={styles.header}>
           <View style={styles.waxBadge}>
-            <Heart size={22} color={colors.primary} fill={colors.primary} />
+            <Heart size={24} color={colors.primary} fill={colors.primary} />
           </View>
           <Text style={styles.title}>Our Date Journal</Text>
           <Text style={styles.userSubtitle}>
@@ -57,7 +58,7 @@ export function DashboardScreen({ onNavigateLog, onNavigateHistory }) {
           </Text>
         </View>
 
-        {/* Two Big Action Cards */}
+        {/* Dynamic Action Cards Container - Expands to fill available height */}
         <View style={styles.actionsContainer}>
           {/* Action 1: Log Date */}
           <TouchableOpacity
@@ -72,7 +73,7 @@ export function DashboardScreen({ onNavigateLog, onNavigateHistory }) {
               <View style={styles.actionTextWrap}>
                 <Text style={styles.primaryActionTitle}>Log Date</Text>
                 <Text style={styles.primaryActionDesc}>
-                  Record a new memory, venue & photo
+                  Record a new memory, venue & photos
                 </Text>
               </View>
             </View>
@@ -120,18 +121,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+    width: '100%',
   },
   scrollContent: {
-    padding: 18,
-    paddingTop: 12,
-    paddingBottom: 40,
+    flexGrow: 1,
+    width: '100%',
+    paddingHorizontal: '3%',
+    paddingTop: '1%',
+    paddingBottom: '3%',
   },
   topBar: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 4,
+    marginBottom: 10,
+    paddingHorizontal: '2%',
   },
   brandRow: {
     flexDirection: 'row',
@@ -161,12 +166,17 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
   },
   mainCard: {
+    width: '100%',
+    flex: 1,
+    minHeight: '92%',
     backgroundColor: colors.surface,
     borderRadius: 24,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
-    padding: 24,
-    paddingTop: 28,
+    paddingHorizontal: '5%',
+    paddingTop: '8%',
+    paddingBottom: '6%',
+    justifyContent: 'space-between',
     shadowColor: colors.cardBorder,
     shadowOffset: { width: 3, height: 6 },
     shadowOpacity: 0.16,
@@ -177,7 +187,7 @@ const styles = StyleSheet.create({
   paperclipWrapper: {
     position: 'absolute',
     top: -14,
-    right: 32,
+    right: 28,
     width: 22,
     height: 46,
     borderRadius: 11,
@@ -210,14 +220,15 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   header: {
+    width: '100%',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 24,
+    marginTop: 4,
+    marginBottom: '4%',
   },
   waxBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.primaryLight,
     borderWidth: 1.5,
     borderColor: 'rgba(141, 61, 47, 0.3)',
@@ -226,14 +237,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: {
-    fontSize: 27,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: colors.textDark,
-    marginBottom: 4,
+    marginBottom: 6,
     textAlign: 'center',
   },
   userSubtitle: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: colors.textSubtle,
     textAlign: 'center',
   },
@@ -242,13 +253,18 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   actionsContainer: {
-    gap: 14,
-    marginBottom: 24,
+    width: '100%',
+    flex: 1,
+    justifyContent: 'center',
+    gap: 16,
+    marginVertical: '4%',
   },
   primaryActionCard: {
+    width: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 20,
+    paddingVertical: '5%',
+    paddingHorizontal: '5%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -259,11 +275,13 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   secondaryActionCard: {
+    width: '100%',
     backgroundColor: colors.surfaceSubtle,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1.5,
     borderColor: colors.borderSubtle,
-    padding: 18,
+    paddingVertical: '5%',
+    paddingHorizontal: '5%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -277,21 +295,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 12,
+    marginRight: 10,
   },
   primaryIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   secondaryIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -301,61 +319,63 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   primaryActionTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   primaryActionDesc: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12.5,
+    color: 'rgba(255, 255, 255, 0.88)',
     lineHeight: 16,
   },
   secondaryActionTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
     color: colors.textDark,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   secondaryActionDesc: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: colors.textSubtle,
     lineHeight: 16,
   },
   arrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   secondaryArrowCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   quoteScrap: {
+    width: '100%',
     backgroundColor: colors.surfaceSubtle,
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    paddingVertical: '3%',
+    paddingHorizontal: '4%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quoteText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontStyle: 'italic',
     color: colors.textMedium,
+    textAlign: 'center',
   },
   quoteHeart: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 15,
   },
 });
-
