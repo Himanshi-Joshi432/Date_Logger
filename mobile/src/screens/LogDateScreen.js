@@ -138,23 +138,14 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       formData.append('date', dateString);
       formData.append('description', description.trim());
 
-      // Append multiple images
-      imageFiles.forEach((img) => {
+      // Append multiple images without duplicate entries
+      imageFiles.forEach((img, idx) => {
         formData.append('images', {
           uri: img.uri,
-          name: img.name || 'photo.jpg',
+          name: img.name || `photo-${Date.now()}-${idx}.jpg`,
           type: img.type || 'image/jpeg',
         });
       });
-
-      // Backward compatible primary image
-      if (imageFiles[0]) {
-        formData.append('image', {
-          uri: imageFiles[0].uri,
-          name: imageFiles[0].name || 'photo.jpg',
-          type: imageFiles[0].type || 'image/jpeg',
-        });
-      }
 
       await postAPI.createPost(formData, token);
 

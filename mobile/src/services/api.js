@@ -2,14 +2,60 @@
 export const API_BASE_URL = 'https://date-logger.singlehq.me';
 
 /**
+ * Upload multipart FormData using React Native's native XMLHttpRequest
+ * to avoid Expo WinterCG fetch "Unsupported FormDataPart implementation" errors.
+ */
+function uploadFormData(url, formData, token) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.timeout = 120000; // 2 minutes timeout for photo uploads
+
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+    // Do NOT set Content-Type header - React Native's XMLHttpRequest sets multipart/form-data boundary automatically.
+
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch (e) {
+        data = { message: xhr.responseText };
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else {
+        reject(new Error(data.message || `Request failed with status ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Network request failed. Please check your internet connection.'));
+    };
+
+    xhr.ontimeout = () => {
+      reject(new Error('Upload timed out. Please try again.'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+/**
  * Common API request wrapper
  */
 export async function apiRequest(endpoint, { method = 'GET', body, token, isFormData = false } = {}) {
-  const headers = {};
+  const url = `${API_BASE_URL}${endpoint}`;
 
-  if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
+  if (isFormData) {
+    return uploadFormData(url, body, token);
   }
+
+  const headers = {
+    'Content-Type': 'application/json',
+  };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -21,10 +67,8 @@ export async function apiRequest(endpoint, { method = 'GET', body, token, isForm
   };
 
   if (body) {
-    config.body = isFormData ? body : JSON.stringify(body);
+    config.body = JSON.stringify(body);
   }
-
-  const url = `${API_BASE_URL}${endpoint}`;
 
   try {
     const response = await fetch(url, config);
