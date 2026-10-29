@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 
 export function RegisterScreen({ onNavigateLogin }) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -191,8 +193,9 @@ export function RegisterScreen({ onNavigateLogin }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const getStyles = (colors) =>
+  StyleSheet.create({
+    container: {
     flex: 1,
     backgroundColor: colors.bg,
   },

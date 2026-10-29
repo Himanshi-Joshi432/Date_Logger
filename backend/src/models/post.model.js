@@ -14,14 +14,38 @@ const postSchema = new mongoose.Schema({
             type: String,
             default: null
         },
+        title: {
+            type: String,
+            default: null
+        },
+        artist: {
+            type: String,
+            default: null
+        },
+        albumCover: {
+            type: String,
+            default: null
+        },
         startTime: {
-            type: Number, // in seconds (e.g., 30 for 0:30)
+            type: Number, // in seconds
             default: 0
         },
-        duration: {       // (or Duration if you prefer capital D)
-            type: Number, // in seconds (e.g., 15 or 30)
-            default: 30
+        duration: {
+            type: Number, // in seconds (e.g. 15)
+            default: 15
         }
+    },
+    rating: {
+        type: Number,
+        default: null
+    },
+    mood: {
+        type: String,
+        default: null
+    },
+    category: {
+        type: String,
+        default: null
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,

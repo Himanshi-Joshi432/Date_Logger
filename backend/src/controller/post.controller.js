@@ -71,7 +71,7 @@ async function createPost(req, res) {
 
         const allImageUrls = [...uploadedUrls, ...directImageUrls];
 
-        const { venue, date, description } = req.body;
+        const { venue, date, description, rating, mood, category } = req.body;
 
         let music = undefined;
         if (audioFile) {
@@ -79,13 +79,30 @@ async function createPost(req, res) {
             music = {
                 audioUrl: audioResult.url,
                 startTime: Number(req.body.startTime) || 0,
-                duration: Number(req.body.duration ?? req.body.Duration) || 30
+                duration: Number(req.body.duration ?? req.body.Duration) || 15
             };
+        } else if (req.body.music) {
+            try {
+                const parsed = typeof req.body.music === 'string' ? JSON.parse(req.body.music) : req.body.music;
+                music = {
+                    audioUrl: parsed.audioUrl || parsed.preview || parsed.url,
+                    title: parsed.title || null,
+                    artist: parsed.artist || null,
+                    albumCover: parsed.albumCover || null,
+                    startTime: Number(parsed.startTime) || 0,
+                    duration: Number(parsed.duration) || 15
+                };
+            } catch (e) {
+                music = { audioUrl: req.body.music, duration: 15 };
+            }
         } else if (req.body.audioUrl) {
             music = {
                 audioUrl: req.body.audioUrl.trim(),
+                title: req.body.songTitle || undefined,
+                artist: req.body.songArtist || undefined,
+                albumCover: req.body.albumCover || undefined,
                 startTime: Number(req.body.startTime) || 0,
-                duration: Number(req.body.duration ?? req.body.Duration) || 30
+                duration: Number(req.body.duration ?? req.body.Duration) || 15
             };
         }
 
@@ -96,6 +113,9 @@ async function createPost(req, res) {
             description,
             date,
             music,
+            rating: rating ? Number(rating) : undefined,
+            mood: mood || undefined,
+            category: category || undefined,
             createdBy: userId
         });
 
@@ -202,8 +222,93 @@ async function deletePost(req, res) {
     }
 }
 
+async function updatePost(req, res) {
+    const userId = getAuthenticatedUserId(req);
+    if (!userId) {
+        return res.status(401).json({
+            message: "Unauthorized"
+        });
+    }
+
+    try {
+        const id = req.params.id;
+        const post = await postModel.findById(id);
+        if (!post) {
+            return res.status(404).json({ message: "Date log not found" });
+        }
+
+        const { venue, date, description, rating, mood, category } = req.body;
+        if (venue !== undefined) post.venue = venue;
+        if (date !== undefined) post.date = date;
+        if (description !== undefined) post.description = description;
+        if (rating !== undefined) post.rating = rating ? Number(rating) : null;
+        if (mood !== undefined) post.mood = mood;
+        if (category !== undefined) post.category = category;
+
+        const imageFiles = [
+            ...(req.files?.images || []),
+            ...(req.files?.image || []),
+            ...(req.file ? [req.file] : [])
+        ];
+        if (imageFiles.length > 0) {
+            const uploadPromises = imageFiles.map((file) => uploadImage(file));
+            const uploadResults = await Promise.all(uploadPromises);
+            const newUploadedUrls = uploadResults.map((r) => r.url);
+            post.images = [...(post.images || []), ...newUploadedUrls];
+            if (!post.image) post.image = newUploadedUrls[0];
+        }
+
+        const audioFile = req.files?.audio?.[0] || req.files?.music?.[0];
+        if (audioFile) {
+            const audioResult = await uploadImage(audioFile);
+            post.music = {
+                audioUrl: audioResult.url,
+                startTime: Number(req.body.startTime) || 0,
+                duration: Number(req.body.duration ?? req.body.Duration) || 15
+            };
+        } else if (req.body.music) {
+            try {
+                const parsed = typeof req.body.music === 'string' ? JSON.parse(req.body.music) : req.body.music;
+                post.music = {
+                    audioUrl: parsed.audioUrl || parsed.preview || parsed.url,
+                    title: parsed.title || null,
+                    artist: parsed.artist || null,
+                    albumCover: parsed.albumCover || null,
+                    startTime: Number(parsed.startTime) || 0,
+                    duration: Number(parsed.duration) || 15
+                };
+            } catch (e) {
+                post.music = { audioUrl: req.body.music, duration: 15 };
+            }
+        } else if (req.body.audioUrl) {
+            post.music = {
+                audioUrl: req.body.audioUrl.trim(),
+                title: req.body.songTitle || post.music?.title,
+                artist: req.body.songArtist || post.music?.artist,
+                albumCover: req.body.albumCover || post.music?.albumCover,
+                startTime: Number(req.body.startTime) || 0,
+                duration: Number(req.body.duration ?? req.body.Duration) || 15
+            };
+        }
+
+        await post.save();
+        const populated = await post.populate("createdBy", "email");
+        return res.status(200).json({
+            message: "post updated successfully",
+            post: populated
+        });
+    } catch (error) {
+        console.error("Error updating post:", error);
+        return res.status(500).json({
+            message: "Error updating post",
+            error: error.message
+        });
+    }
+}
+
 module.exports = {
     createPost,
+    updatePost,
     getPosts,
     getPostById,
     deletePost

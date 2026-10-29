@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,16 @@ import {
   Image,
   Platform,
   Alert,
+  Vibration,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import { createAudioPlayer } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   MapPin,
   Calendar as CalendarIcon,
   FileText,
-  UploadCloud,
   X,
   ArrowLeft,
   Sparkles,
@@ -25,25 +27,205 @@ import {
   AlertCircle,
   Camera,
   Image as ImageIcon,
-  Plus,
+  Music,
+  Play,
+  Pause,
+  Heart,
+  Tag,
+  Smile,
+  Search,
+  Check,
+  Disc,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { postAPI } from '../services/api';
-import { colors } from '../theme/colors';
+import { searchDeezerTracks, POPULAR_DATE_SONGS } from '../services/musicService';
 
-export function LogDateScreen({ onNavigateBack, onLogSaved }) {
+const DRAFT_STORAGE_KEY = 'date_logger_log_draft';
+
+const CATEGORIES = [
+  'Romantic Dinner',
+  'Cozy Cafe',
+  'Movie Night',
+  'Road Trip',
+  'Anniversary',
+  'First Date',
+  'Nature & Walks',
+  'Special Celebration',
+];
+
+const MOODS = [
+  { label: 'Romantic', icon: '🥰' },
+  { label: 'Magical', icon: '✨' },
+  { label: 'Fun & Laughs', icon: '😂' },
+  { label: 'Cozy', icon: '☕' },
+  { label: 'Fancy', icon: '🍷' },
+];
+
+export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' }) {
   const { token } = useAuth();
+  const { colors } = useTheme();
 
-  const [venue, setVenue] = useState('');
+  const [venue, setVenue] = useState(initialVenue);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [description, setDescription] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedMood, setSelectedMood] = useState('');
+  const [rating, setRating] = useState(5);
+
   const [imageFiles, setImageFiles] = useState([]);
+
+  // Deezer Music Search State
+  const [musicQuery, setMusicQuery] = useState('');
+  const [isSearchingMusic, setIsSearchingMusic] = useState(false);
+  const [musicResults, setMusicResults] = useState([]);
+  const [selectedSong, setSelectedSong] = useState(null); // { id, title, artist, albumCover, preview, duration }
+  const [showMusicSearch, setShowMusicSearch] = useState(false);
+
+  // Audio preview state
+  const [soundPlayer, setSoundPlayer] = useState(null);
+  const [playingPreviewUrl, setPlayingPreviewUrl] = useState(null);
+  const previewTimerRef = useRef(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
 
-  // Handle Date picker change
+  // Restore draft on mount
+  useEffect(() => {
+    async function restoreDraft() {
+      if (initialVenue) return;
+      try {
+        const stored = await AsyncStorage.getItem(DRAFT_STORAGE_KEY);
+        if (stored) {
+          const draft = JSON.parse(stored);
+          if (draft.venue) setVenue(draft.venue);
+          if (draft.description) setDescription(draft.description);
+          if (draft.category) setSelectedCategory(draft.category);
+          if (draft.mood) setSelectedMood(draft.mood);
+          if (draft.rating) setRating(draft.rating);
+          if (draft.date) setSelectedDate(new Date(draft.date));
+          if (draft.selectedSong) setSelectedSong(draft.selectedSong);
+          setDraftRestored(true);
+        }
+      } catch (e) {}
+    }
+    restoreDraft();
+
+    return () => {
+      stopAudioPreview();
+    };
+  }, []);
+
+  // Auto-save draft
+  useEffect(() => {
+    async function saveDraft() {
+      if (venue || description || selectedCategory || selectedMood || selectedSong) {
+        try {
+          const draft = {
+            venue,
+            description,
+            category: selectedCategory,
+            mood: selectedMood,
+            rating,
+            selectedSong,
+            date: selectedDate.toISOString(),
+          };
+          await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+        } catch (e) {}
+      }
+    }
+    const timeout = setTimeout(saveDraft, 800);
+    return () => clearTimeout(timeout);
+  }, [venue, description, selectedCategory, selectedMood, rating, selectedDate, selectedSong]);
+
+  const clearDraft = async () => {
+    try {
+      await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (e) {}
+  };
+
+  const stopAudioPreview = () => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    if (soundPlayer) {
+      soundPlayer.pause();
+      soundPlayer.release();
+      setSoundPlayer(null);
+    }
+    setPlayingPreviewUrl(null);
+  };
+
+  const toggleSongPreview = async (previewUrl) => {
+    if (!previewUrl) return;
+
+    if (playingPreviewUrl === previewUrl && soundPlayer) {
+      stopAudioPreview();
+      return;
+    }
+
+    stopAudioPreview();
+
+    try {
+      const player = createAudioPlayer(previewUrl);
+      player.play();
+      setSoundPlayer(player);
+      setPlayingPreviewUrl(previewUrl);
+
+      // Stop after 15 seconds
+      previewTimerRef.current = setTimeout(() => {
+        stopAudioPreview();
+      }, 15000);
+
+      player.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) {
+          stopAudioPreview();
+        }
+      });
+    } catch (e) {
+      console.warn('Audio preview error', e);
+      stopAudioPreview();
+    }
+  };
+
+  const handleSearchMusic = async (queryText) => {
+    const q = queryText !== undefined ? queryText : musicQuery;
+    if (!q || !q.trim()) return;
+
+    setIsSearchingMusic(true);
+    setShowMusicSearch(true);
+    try {
+      const results = await searchDeezerTracks(q);
+      setMusicResults(results);
+    } catch (e) {
+      setMusicResults([]);
+    } finally {
+      setIsSearchingMusic(false);
+    }
+  };
+
+  const handleSelectSong = (song) => {
+    try {
+      Vibration.vibrate(20);
+    } catch (e) {}
+    stopAudioPreview();
+    setSelectedSong(song);
+    setShowMusicSearch(false);
+    setMusicResults([]);
+    setMusicQuery('');
+  };
+
+  const handleRemoveSong = () => {
+    stopAudioPreview();
+    setSelectedSong(null);
+  };
+
   const onDateChange = (event, date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
@@ -51,7 +233,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     }
   };
 
-  // Launch gallery picker with multiple selection
+  // Gallery image selection
   const pickFromGallery = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -63,7 +245,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
-        quality: 0.85,
+        quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -76,11 +258,11 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
         setErrorMsg('');
       }
     } catch (err) {
-      setErrorMsg('Failed to select photo from gallery');
+      setErrorMsg('Failed to select photos from gallery');
     }
   };
 
-  // Launch camera
+  // Camera capture
   const takePhoto = async () => {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -91,7 +273,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
 
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.85,
+        quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -115,6 +297,13 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     setImageFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
+  const handleSelectRating = (val) => {
+    try {
+      Vibration.vibrate(15);
+    } catch (e) {}
+    setRating(val);
+  };
+
   const handleSubmit = async () => {
     setErrorMsg('');
     setSuccessMsg('');
@@ -130,6 +319,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     }
 
     setIsSubmitting(true);
+    setUploadPercent(0);
 
     try {
       const dateString = selectedDate.toISOString().split('T')[0];
@@ -137,8 +327,11 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
       formData.append('venue', venue.trim());
       formData.append('date', dateString);
       formData.append('description', description.trim());
+      if (selectedCategory) formData.append('category', selectedCategory);
+      if (selectedMood) formData.append('mood', selectedMood);
+      if (rating) formData.append('rating', String(rating));
 
-      // Append multiple images without duplicate entries
+      // Append multiple images
       imageFiles.forEach((img, idx) => {
         formData.append('images', {
           uri: img.uri,
@@ -147,21 +340,52 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
         });
       });
 
-      await postAPI.createPost(formData, token);
+      // Append Deezer soundtrack metadata
+      if (selectedSong?.preview) {
+        formData.append('audioUrl', selectedSong.preview);
+        formData.append('songTitle', selectedSong.title || '');
+        formData.append('songArtist', selectedSong.artist || '');
+        if (selectedSong.albumCover) {
+          formData.append('albumCover', selectedSong.albumCover);
+        }
+        formData.append(
+          'music',
+          JSON.stringify({
+            audioUrl: selectedSong.preview,
+            title: selectedSong.title,
+            artist: selectedSong.artist,
+            albumCover: selectedSong.albumCover,
+            duration: 15,
+          })
+        );
+      }
+
+      await postAPI.createPost(formData, token, (percent) => {
+        setUploadPercent(percent);
+      });
+
+      try {
+        Vibration.vibrate([0, 50, 70, 50]);
+      } catch (e) {}
 
       setSuccessMsg('Date memory saved successfully! ♡');
+      await clearDraft();
+
       setVenue('');
       setDescription('');
+      setSelectedCategory('');
+      setSelectedMood('');
       setSelectedDate(new Date());
       setImageFiles([]);
+      handleRemoveSong();
 
       if (onLogSaved) {
         setTimeout(() => {
           onLogSaved();
-        }, 1200);
+        }, 1100);
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to save date. Check your connection.');
+      setErrorMsg(err.message || 'Failed to save date memory. Check your connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -172,6 +396,8 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
     month: 'short',
     day: 'numeric',
   });
+
+  const styles = getStyles(colors);
 
   return (
     <ScrollView
@@ -198,52 +424,65 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
           <View style={styles.sparkleBadge}>
             <Sparkles size={24} color={colors.primary} />
           </View>
-          <Text style={styles.title}>Document a Moment</Text>
+          <Text style={styles.title}>Preserve a Date</Text>
           <Text style={styles.subtitle}>
-            Preserve multiple photos and notes of your favorite times
+            Capture the feelings, music & snapshots of your special moment
           </Text>
         </View>
 
-        {/* Feedback Alerts */}
+        {/* Draft Restored Banner */}
+        {draftRestored ? (
+          <View style={styles.draftBox}>
+            <Sparkles size={14} color={colors.primary} />
+            <Text style={styles.draftText}>Restored your unsaved draft</Text>
+          </View>
+        ) : null}
+
+        {/* Feedback Messages */}
         {errorMsg ? (
-          <View style={styles.alertError}>
+          <View style={styles.errorBox}>
             <AlertCircle size={16} color={colors.danger} />
-            <Text style={styles.alertErrorText}>{errorMsg}</Text>
+            <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
         ) : null}
 
         {successMsg ? (
-          <View style={styles.alertSuccess}>
+          <View style={styles.successBox}>
             <CheckCircle2 size={16} color={colors.success} />
-            <Text style={styles.alertSuccessText}>{successMsg}</Text>
+            <Text style={styles.successText}>{successMsg}</Text>
           </View>
         ) : null}
 
-        {/* Venue Field */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Venue / Place</Text>
-          <View style={styles.inputWrap}>
-            <MapPin size={18} color={colors.primary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Skyline Rooftop Cafe"
-              placeholderTextColor={colors.textMuted}
-              value={venue}
-              onChangeText={setVenue}
-            />
+        {/* 1. Venue Input */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <MapPin size={16} color={colors.primary} />
+            <Text style={styles.label}>Venue / Place</Text>
+            <Text style={styles.required}>*</Text>
           </View>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Luna Bistro, Skyline Lookout..."
+            placeholderTextColor={colors.textMuted}
+            value={venue}
+            onChangeText={setVenue}
+          />
         </View>
 
-        {/* Date Field */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Date</Text>
+        {/* 2. Date Picker */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <CalendarIcon size={16} color={colors.primary} />
+            <Text style={styles.label}>Date of Outing</Text>
+            <Text style={styles.required}>*</Text>
+          </View>
           <TouchableOpacity
-            style={styles.inputWrap}
+            style={styles.datePickerBtn}
             onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <CalendarIcon size={18} color={colors.primary} style={styles.inputIcon} />
-            <Text style={styles.dateValueText}>{formattedDate}</Text>
+            <Text style={styles.datePickerText}>{formattedDate}</Text>
+            <CalendarIcon size={16} color={colors.textSubtle} />
           </TouchableOpacity>
 
           {showDatePicker && (
@@ -257,97 +496,351 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
           )}
         </View>
 
-        {/* Description Field */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Description / Notes</Text>
-          <View style={[styles.inputWrap, styles.textAreaWrap]}>
-            <FileText
-              size={18}
-              color={colors.primary}
-              style={[styles.inputIcon, { marginTop: 4 }]}
-            />
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="What made this date special? Favorite food, funny moments..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              value={description}
-              onChangeText={setDescription}
-            />
+        {/* 3. Category Chips */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Tag size={16} color={colors.primary} />
+            <Text style={styles.label}>Category</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
+            {CATEGORIES.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.chip, isSelected && styles.chipActive]}
+                  onPress={() => setSelectedCategory(isSelected ? '' : cat)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* 4. Mood Selector */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Smile size={16} color={colors.primary} />
+            <Text style={styles.label}>Mood & Vibe</Text>
+          </View>
+          <View style={styles.moodRow}>
+            {MOODS.map((m) => {
+              const isSelected = selectedMood === m.label;
+              return (
+                <TouchableOpacity
+                  key={m.label}
+                  style={[styles.moodBtn, isSelected && styles.moodBtnActive]}
+                  onPress={() => setSelectedMood(isSelected ? '' : m.label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.moodEmoji}>{m.icon}</Text>
+                  <Text style={[styles.moodLabel, isSelected && styles.moodLabelActive]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
-        {/* Multiple Photos Upload Field */}
-        <View style={styles.fieldGroup}>
+        {/* 5. Heart Rating */}
+        <View style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Memory Photos ({imageFiles.length})</Text>
-            {imageFiles.length > 0 && (
-              <TouchableOpacity onPress={() => setImageFiles([])}>
-                <Text style={styles.clearAllText}>Clear all</Text>
+            <Heart size={16} color={colors.primary} />
+            <Text style={styles.label}>Date Rating</Text>
+          </View>
+          <View style={styles.ratingRow}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                onPress={() => handleSelectRating(star)}
+                activeOpacity={0.7}
+                style={styles.ratingHeartBtn}
+              >
+                <Heart
+                  size={28}
+                  color={colors.primary}
+                  fill={star <= rating ? colors.primary : 'transparent'}
+                />
               </TouchableOpacity>
-            )}
+            ))}
+            <Text style={styles.ratingScore}>{rating} / 5 Hearts</Text>
+          </View>
+        </View>
+
+        {/* 6. Description / Journal Note */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <FileText size={16} color={colors.primary} />
+            <Text style={styles.label}>Journal Note</Text>
+          </View>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="What made this moment unforgettable? The laughter, food, playlist..."
+            placeholderTextColor={colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
+
+        {/* 7. DEEZER MUSIC SOUNDTRACK SEARCH & ATTACH */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Disc size={16} color={colors.primary} />
+            <Text style={styles.label}>Memory Soundtrack (Deezer 15s)</Text>
           </View>
 
-          {imageFiles.length > 0 ? (
-            <View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.previewsRow}
-              >
-                {imageFiles.map((img, idx) => (
-                  <View key={idx} style={styles.previewThumbWrap}>
-                    <Image source={{ uri: img.uri }} style={styles.previewThumb} />
-                    <TouchableOpacity
-                      style={styles.removeImageBtn}
-                      onPress={() => handleRemoveImage(idx)}
-                      activeOpacity={0.8}
-                    >
-                      <X size={12} color="#ffffff" />
-                    </TouchableOpacity>
-                    {idx === 0 && (
-                      <View style={styles.coverBadge}>
-                        <Text style={styles.coverBadgeText}>Cover</Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
+          {/* Selected Song Preview Card */}
+          {selectedSong ? (
+            <View style={styles.selectedSongCard}>
+              {selectedSong.albumCover ? (
+                <Image
+                  source={{ uri: selectedSong.albumCover }}
+                  style={styles.selectedSongCover}
+                />
+              ) : (
+                <View style={styles.noCoverIcon}>
+                  <Music size={20} color={colors.primary} />
+                </View>
+              )}
 
-                {/* Add more button */}
-                <TouchableOpacity
-                  style={styles.addMoreBtn}
-                  onPress={pickFromGallery}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={20} color={colors.primary} />
-                  <Text style={styles.addMoreText}>Add</Text>
-                </TouchableOpacity>
-              </ScrollView>
+              <View style={styles.selectedSongInfo}>
+                <Text style={styles.selectedSongTitle} numberOfLines={1}>
+                  {selectedSong.title}
+                </Text>
+                <Text style={styles.selectedSongArtist} numberOfLines={1}>
+                  {selectedSong.artist}
+                </Text>
+                <View style={styles.fifteenBadge}>
+                  <Text style={styles.fifteenBadgeText}>15s Soundtrack Attached</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.previewBtn}
+                onPress={() => toggleSongPreview(selectedSong.preview)}
+                activeOpacity={0.7}
+              >
+                {playingPreviewUrl === selectedSong.preview ? (
+                  <Pause size={16} color="#ffffff" />
+                ) : (
+                  <Play size={16} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.removeSongBtn}
+                onPress={handleRemoveSong}
+                activeOpacity={0.7}
+              >
+                <X size={18} color={colors.danger} />
+              </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.uploadOptions}>
-              <TouchableOpacity
-                style={styles.uploadOptionBtn}
-                onPress={pickFromGallery}
-                activeOpacity={0.8}
-              >
-                <ImageIcon size={22} color={colors.primary} />
-                <Text style={styles.uploadOptionText}>Photo Gallery</Text>
-              </TouchableOpacity>
+            <View>
+              {/* Search input for Deezer */}
+              <View style={styles.musicSearchRow}>
+                <Search size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.musicInput}
+                  placeholder="Search artist or song (e.g. Coldplay, Perfect)..."
+                  placeholderTextColor={colors.textMuted}
+                  value={musicQuery}
+                  onChangeText={setMusicQuery}
+                  onSubmitEditing={() => handleSearchMusic()}
+                  returnKeyType="search"
+                />
+                {musicQuery ? (
+                  <TouchableOpacity
+                    onPress={() => setMusicQuery('')}
+                    style={{ padding: 4 }}
+                  >
+                    <X size={16} color={colors.textSubtle} />
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.searchActionBtn}
+                  onPress={() => handleSearchMusic()}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.searchActionBtnText}>Search</Text>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.uploadOptionBtn}
-                onPress={takePhoto}
-                activeOpacity={0.8}
-              >
-                <Camera size={22} color={colors.primary} />
-                <Text style={styles.uploadOptionText}>Take Photo</Text>
-              </TouchableOpacity>
+              {/* Quick Popular Suggestions */}
+              {!showMusicSearch && (
+                <View style={styles.popularSongsWrap}>
+                  <Text style={styles.popularLabel}>Popular Date Songs:</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 6 }}
+                  >
+                    {POPULAR_DATE_SONGS.map((songName) => (
+                      <TouchableOpacity
+                        key={songName}
+                        style={styles.popularPill}
+                        onPress={() => {
+                          setMusicQuery(songName);
+                          handleSearchMusic(songName);
+                        }}
+                      >
+                        <Music size={11} color={colors.primary} />
+                        <Text style={styles.popularPillText}>{songName}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Search Results List */}
+              {isSearchingMusic ? (
+                <View style={styles.musicLoadingWrap}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.musicLoadingText}>Searching Deezer catalog...</Text>
+                </View>
+              ) : (
+                showMusicSearch && (
+                  <View style={styles.musicResultsList}>
+                    {musicResults.length === 0 ? (
+                      <Text style={styles.noMusicFound}>
+                        No tracks found with preview. Try searching another song or artist.
+                      </Text>
+                    ) : (
+                      musicResults.map((track) => {
+                        const isPreviewPlaying = playingPreviewUrl === track.preview;
+                        return (
+                          <View key={track.id} style={styles.trackResultItem}>
+                            {track.albumCover ? (
+                              <Image
+                                source={{ uri: track.albumCover }}
+                                style={styles.trackThumb}
+                              />
+                            ) : (
+                              <View style={styles.trackThumbPlaceholder}>
+                                <Music size={16} color={colors.primary} />
+                              </View>
+                            )}
+
+                            <View style={styles.trackDetails}>
+                              <Text style={styles.trackTitle} numberOfLines={1}>
+                                {track.title}
+                              </Text>
+                              <Text style={styles.trackArtist} numberOfLines={1}>
+                                {track.artist}
+                              </Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.trackPreviewBtn,
+                                isPreviewPlaying && styles.trackPreviewBtnActive,
+                              ]}
+                              onPress={() => toggleSongPreview(track.preview)}
+                              activeOpacity={0.7}
+                            >
+                              {isPreviewPlaying ? (
+                                <Pause size={14} color="#ffffff" />
+                              ) : (
+                                <Play size={14} color={colors.primary} />
+                              )}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.trackSelectBtn}
+                              onPress={() => handleSelectSong(track)}
+                              activeOpacity={0.8}
+                            >
+                              <Check size={14} color="#ffffff" />
+                              <Text style={styles.trackSelectBtnText}>Attach</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                )
+              )}
             </View>
           )}
         </View>
+
+        {/* 8. Photo Uploads */}
+        <View style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <ImageIcon size={16} color={colors.primary} />
+            <Text style={styles.label}>Photo Memories</Text>
+            <Text style={styles.required}>*</Text>
+          </View>
+
+          {/* Action buttons */}
+          <View style={styles.imageActionButtons}>
+            <TouchableOpacity
+              style={styles.pickerBtn}
+              onPress={pickFromGallery}
+              activeOpacity={0.8}
+            >
+              <ImageIcon size={18} color={colors.primary} />
+              <Text style={styles.pickerBtnText}>Choose Gallery Photos</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cameraBtn}
+              onPress={takePhoto}
+              activeOpacity={0.8}
+            >
+              <Camera size={18} color={colors.textDark} />
+              <Text style={styles.cameraBtnText}>Take Photo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Image Previews Grid */}
+          {imageFiles.length > 0 && (
+            <View style={styles.previewGrid}>
+              {imageFiles.map((item, idx) => (
+                <View key={idx} style={styles.thumbnailWrapper}>
+                  <Image source={{ uri: item.uri }} style={styles.thumbnail} />
+                  <TouchableOpacity
+                    style={styles.removeImageBadge}
+                    onPress={() => handleRemoveImage(idx)}
+                    activeOpacity={0.7}
+                  >
+                    <X size={12} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Upload Progress Bar */}
+        {isSubmitting && (
+          <View style={styles.progressContainer}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressTitle}>Saving memory...</Text>
+              <Text style={styles.progressPercent}>{uploadPercent}%</Text>
+            </View>
+            <View style={styles.progressBarTrack}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${Math.max(uploadPercent, 8)}%` },
+                ]}
+              />
+            </View>
+          </View>
+        )}
 
         {/* Submit Button */}
         <TouchableOpacity
@@ -357,12 +850,9 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
           activeOpacity={0.85}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator size="small" color="#ffffff" />
           ) : (
-            <>
-              <UploadCloud size={20} color="#ffffff" style={{ marginRight: 8 }} />
-              <Text style={styles.submitBtnText}>Save Date Memory</Text>
-            </>
+            <Text style={styles.submitBtnText}>Preserve Memory ♡</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -370,263 +860,568 @@ export function LogDateScreen({ onNavigateBack, onLogSaved }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  scrollContent: {
-    padding: 18,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.textDark,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.cardBorder,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: colors.cardBorder,
-    shadowOffset: { width: 3, height: 5 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  sparkleBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1.5,
-    borderColor: 'rgba(141, 61, 47, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.textDark,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 12.5,
-    color: colors.textSubtle,
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-  alertError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff5f4',
-    borderWidth: 1,
-    borderColor: 'rgba(156, 46, 36, 0.3)',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
-    gap: 8,
-  },
-  alertErrorText: {
-    flex: 1,
-    fontSize: 12.5,
-    color: colors.danger,
-    fontWeight: '500',
-  },
-  alertSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f2f7f3',
-    borderWidth: 1,
-    borderColor: 'rgba(55, 99, 66, 0.3)',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
-    gap: 8,
-  },
-  alertSuccessText: {
-    flex: 1,
-    fontSize: 12.5,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textDark,
-    marginBottom: 6,
-  },
-  clearAllText: {
-    fontSize: 11.5,
-    color: colors.danger,
-    textDecorationLine: 'underline',
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fdfbf7',
-    borderWidth: 1.5,
-    borderColor: colors.borderSubtle,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: 46,
-  },
-  textAreaWrap: {
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.textDark,
-    padding: 0,
-  },
-  textArea: {
-    height: 72,
-  },
-  dateValueText: {
-    fontSize: 14,
-    color: colors.textDark,
-    fontWeight: '500',
-  },
-  uploadOptions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  uploadOptionBtn: {
-    flex: 1,
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1.5,
-    borderColor: colors.borderActive,
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  uploadOptionText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  previewsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  previewThumbWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#f7f2eb',
-  },
-  previewThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  removeImageBtn: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(38, 31, 24, 0.82)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverBadge: {
-    position: 'absolute',
-    bottom: 3,
-    left: 3,
-    backgroundColor: colors.primary,
-    paddingVertical: 1,
-    paddingHorizontal: 4,
-    borderRadius: 3,
-  },
-  coverBadgeText: {
-    color: '#ffffff',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  addMoreBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  addMoreText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 6,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  submitBtnDisabled: {
-    opacity: 0.7,
-  },
-  submitBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-});
+const getStyles = (colors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 95,
+    },
+    topNav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 14,
+    },
+    backBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    navTitle: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: colors.textDark,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      borderWidth: 2,
+      borderColor: colors.cardBorder,
+      padding: 16,
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    sparkleBadge: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.textDark,
+      marginBottom: 2,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      textAlign: 'center',
+      paddingHorizontal: 12,
+    },
+    draftBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.primaryLight,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 10,
+      marginBottom: 12,
+    },
+    draftText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.dangerBg,
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      padding: 10,
+      borderRadius: 10,
+      marginBottom: 12,
+    },
+    errorText: {
+      fontSize: 12,
+      color: colors.danger,
+      flex: 1,
+    },
+    successBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.successBg,
+      borderWidth: 1,
+      borderColor: colors.successBorder,
+      padding: 10,
+      borderRadius: 10,
+      marginBottom: 12,
+    },
+    successText: {
+      fontSize: 12,
+      color: colors.success,
+      flex: 1,
+    },
+    inputGroup: {
+      marginBottom: 14,
+    },
+    labelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textDark,
+    },
+    required: {
+      color: colors.danger,
+      fontWeight: 'bold',
+    },
+    input: {
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      color: colors.textDark,
+    },
+    textArea: {
+      minHeight: 80,
+    },
+    datePickerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    datePickerText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textDark,
+    },
+    chipsScroll: {
+      gap: 8,
+      paddingVertical: 4,
+    },
+    chip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    chipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    chipText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSubtle,
+    },
+    chipTextActive: {
+      color: '#ffffff',
+    },
+    moodRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 6,
+    },
+    moodBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    moodBtnActive: {
+      backgroundColor: colors.primaryLight,
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+    },
+    moodEmoji: {
+      fontSize: 18,
+      marginBottom: 2,
+    },
+    moodLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: colors.textSubtle,
+    },
+    moodLabelActive: {
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    ratingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    ratingHeartBtn: {
+      padding: 2,
+    },
+    ratingScore: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSubtle,
+      marginLeft: 6,
+    },
+
+    // Deezer Music Styles
+    selectedSongCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSubtle,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      padding: 10,
+    },
+    selectedSongCover: {
+      width: 48,
+      height: 48,
+      borderRadius: 8,
+      marginRight: 10,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    noCoverIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 8,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    selectedSongInfo: {
+      flex: 1,
+    },
+    selectedSongTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.textDark,
+    },
+    selectedSongArtist: {
+      fontSize: 11,
+      color: colors.textSubtle,
+      marginTop: 1,
+    },
+    fifteenBadge: {
+      backgroundColor: colors.primaryLight,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      alignSelf: 'flex-start',
+      marginTop: 4,
+    },
+    fifteenBadgeText: {
+      fontSize: 9,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    previewBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 8,
+    },
+    removeSongBtn: {
+      padding: 6,
+    },
+    musicSearchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    musicInput: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.textDark,
+      paddingVertical: 8,
+    },
+    searchActionBtn: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      marginLeft: 6,
+    },
+    searchActionBtnText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    popularSongsWrap: {
+      marginTop: 8,
+    },
+    popularLabel: {
+      fontSize: 11,
+      color: colors.textSubtle,
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    popularPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    popularPillText: {
+      fontSize: 11,
+      color: colors.textDark,
+      fontWeight: '500',
+    },
+    musicLoadingWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+    },
+    musicLoadingText: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      fontStyle: 'italic',
+    },
+    musicResultsList: {
+      marginTop: 8,
+      backgroundColor: colors.surfaceSubtle,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      padding: 6,
+      maxHeight: 220,
+    },
+    noMusicFound: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      padding: 12,
+      textAlign: 'center',
+    },
+    trackResultItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 6,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderSubtle,
+    },
+    trackThumb: {
+      width: 36,
+      height: 36,
+      borderRadius: 6,
+      marginRight: 8,
+    },
+    trackThumbPlaceholder: {
+      width: 36,
+      height: 36,
+      borderRadius: 6,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 8,
+    },
+    trackDetails: {
+      flex: 1,
+    },
+    trackTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textDark,
+    },
+    trackArtist: {
+      fontSize: 10,
+      color: colors.textSubtle,
+    },
+    trackPreviewBtn: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 6,
+    },
+    trackPreviewBtnActive: {
+      backgroundColor: colors.primary,
+    },
+    trackSelectBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    trackSelectBtnText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#ffffff',
+    },
+
+    imageActionButtons: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 10,
+    },
+    pickerBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.primaryLight,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    pickerBtnText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    cameraBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: colors.surfaceSubtle,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    cameraBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textDark,
+    },
+    previewGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 4,
+    },
+    thumbnailWrapper: {
+      width: 72,
+      height: 72,
+      borderRadius: 10,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      position: 'relative',
+    },
+    thumbnail: {
+      width: '100%',
+      height: '100%',
+    },
+    removeImageBadge: {
+      position: 'absolute',
+      top: 3,
+      right: 3,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      borderRadius: 10,
+      width: 20,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    progressContainer: {
+      marginBottom: 14,
+    },
+    progressHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    progressTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSubtle,
+    },
+    progressPercent: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    progressBarTrack: {
+      height: 8,
+      backgroundColor: colors.surfaceSubtle,
+      borderRadius: 4,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+    },
+    progressBarFill: {
+      height: '100%',
+      backgroundColor: colors.primary,
+      borderRadius: 4,
+    },
+    submitBtn: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 3,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      marginTop: 4,
+    },
+    submitBtnDisabled: {
+      opacity: 0.6,
+    },
+    submitBtnText: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: '#ffffff',
+    },
+  });

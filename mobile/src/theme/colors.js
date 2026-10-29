@@ -1,5 +1,5 @@
-// Vintage Scrapbook Theme Palette (matching web frontend exactly)
-export const colors = {
+// Vintage Scrapbook Theme Palette
+export const lightColors = {
   bg: '#ece3d4',               // Aged parchment desk background
   canvasBg: '#f5ede1',         // Warm journal page base
   surface: '#ffffff',          // Crisp white card surface
@@ -34,3 +34,40 @@ export const colors = {
   successBorder: '#b7d6be',
 };
 
+export const darkColors = {
+  bg: '#181412',               // Deep candlelit espresso desk
+  canvasBg: '#221b17',         // Warm dark leather journal
+  surface: '#2c231e',          // Warm dark wood card
+  surfaceSubtle: '#362c25',    // Muted dark ivory
+  surfaceHover: '#42372f',
+  borderSubtle: '#4a3d34',     // Burnished brass border
+  borderActive: '#6e5b4e',
+  cardBorder: '#5a493d',
+
+  // Romantic Candlelit Accents
+  primary: '#e2755e',          // Warm glowing ember rose
+  primaryHover: '#f08670',
+  primaryActive: '#c55e48',
+  primaryLight: '#432620',
+
+  kraftPaper: '#544337',
+  antiqueBrass: '#947d63',
+  washiTape: 'rgba(64, 52, 45, 0.92)',
+
+  // Typography
+  textDark: '#f7efe6',         // Soft glowing parchment
+  textMedium: '#d9ccbe',
+  textSubtle: '#aa9987',
+  textMuted: '#7c6d5e',
+
+  // Status
+  danger: '#e86a60',
+  dangerBg: '#3d1f1c',
+  dangerBorder: '#632e2a',
+  success: '#629e71',
+  successBg: '#1b3322',
+  successBorder: '#2e5739',
+};
+
+// Default export backward compatibility
+export const colors = lightColors;

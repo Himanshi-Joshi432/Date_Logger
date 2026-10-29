@@ -3,18 +3,26 @@ export const API_BASE_URL = 'https://date-logger.singlehq.me';
 
 /**
  * Upload multipart FormData using React Native's native XMLHttpRequest
- * to avoid Expo WinterCG fetch "Unsupported FormDataPart implementation" errors.
+ * with progress tracking to avoid Expo WinterCG fetch limitations.
  */
-function uploadFormData(url, formData, token) {
+function uploadFormData(url, formData, token, onProgress = null, method = 'POST') {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.timeout = 120000; // 2 minutes timeout for photo uploads
+    xhr.open(method, url);
+    xhr.timeout = 180000; // 3 minutes timeout for high-res photo uploads
 
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
-    // Do NOT set Content-Type header - React Native's XMLHttpRequest sets multipart/form-data boundary automatically.
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && event.total > 0) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          onProgress(percent);
+        }
+      };
+    }
 
     xhr.onload = () => {
       let data = {};
@@ -46,11 +54,11 @@ function uploadFormData(url, formData, token) {
 /**
  * Common API request wrapper
  */
-export async function apiRequest(endpoint, { method = 'GET', body, token, isFormData = false } = {}) {
+export async function apiRequest(endpoint, { method = 'GET', body, token, isFormData = false, onProgress = null } = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
 
   if (isFormData) {
-    return uploadFormData(url, body, token);
+    return uploadFormData(url, body, token, onProgress, method);
   }
 
   const headers = {
@@ -106,13 +114,25 @@ export const postAPI = {
 
   getPostById: (id, token) => apiRequest(`/api/post/${id}`, { token }),
 
-  createPost: (formData, token) =>
+  createPost: (formData, token, onProgress = null) =>
     apiRequest('/api/post/add', {
       method: 'POST',
       body: formData,
       token,
       isFormData: true,
+      onProgress,
     }),
+
+  updatePost: (id, data, token, onProgress = null) => {
+    const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
+    return apiRequest(`/api/post/${id}`, {
+      method: 'PUT',
+      body: data,
+      token,
+      isFormData: isForm,
+      onProgress,
+    });
+  },
 
   deletePost: (id, token) =>
     apiRequest(`/api/post/delete/${id}`, {
