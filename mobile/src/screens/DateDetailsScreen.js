@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
@@ -6,16 +7,14 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Image,
   Alert,
   useWindowDimensions,
   FlatList,
   Modal,
-  TextInput,
   Share,
-  Vibration,
 } from 'react-native';
 import { createAudioPlayer } from 'expo-audio';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Calendar,
   MapPin,
@@ -35,13 +34,26 @@ import {
   Smile,
   Maximize2,
   Disc,
-  Search,
 } from 'lucide-react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { haptics } from '../utils/haptics';
+import { FadeInView, PressableScale, PulseView, ProgressBar } from '../components/motion';
+import { EditMemoryModal } from '../components/EditMemoryModal';
+import { fonts, shadow } from '../theme/tokens';
 import { postAPI } from '../services/api';
-import { searchDeezerTracks } from '../services/musicService';
+import { resolvePreviewUrl } from '../services/musicService';
+
+const CACHE_KEY_POSTS = 'date_logger_cached_posts';
+
+/** Applies a change to the cached post list so History/Dashboard don't show stale data. */
+async function updateCachedPosts(transform) {
+  try {
+    const cached = await AsyncStorage.getItem(CACHE_KEY_POSTS);
+    if (!cached) return;
+    await AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(transform(JSON.parse(cached))));
+  } catch (e) {}
+}
 
 export function DateDetailsScreen({
   postId,
@@ -49,7 +61,7 @@ export function DateDetailsScreen({
   onNavigateBack,
   onDeleteSuccess,
 }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
   const carouselWidth = width - 32;
@@ -63,26 +75,12 @@ export function DateDetailsScreen({
   const [lightboxVisible, setLightboxVisible] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  // Edit Modal state
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editVenue, setEditVenue] = useState('');
-  const [editDate, setEditDate] = useState(new Date());
-  const [editShowDatePicker, setEditShowDatePicker] = useState(false);
-  const [editDescription, setEditDescription] = useState('');
-  const [editCategory, setEditCategory] = useState('');
-  const [editMood, setEditMood] = useState('');
-  const [editRating, setEditRating] = useState(5);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  // Edit Deezer Music Search
-  const [editMusicQuery, setEditMusicQuery] = useState('');
-  const [editMusicResults, setEditMusicResults] = useState([]);
-  const [isSearchingEditMusic, setIsSearchingEditMusic] = useState(false);
-  const [editSelectedSong, setEditSelectedSong] = useState(null);
 
   // 15-Second Audio Soundtrack Playback state
   const soundRef = useRef(null);
   const autoPlayTimerRef = useRef(null);
+  const playbackTokenRef = useRef(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
 
@@ -117,49 +115,68 @@ export function DateDetailsScreen({
     };
   }, [postId, token]);
 
-  // AUTO-PLAY 15 SECONDS OF MUSIC WHEN MEMORY IS OPEN
-  useEffect(() => {
-    const audioUrl = post?.music?.audioUrl;
-    if (!audioUrl) return;
+  /**
+   * Plays up to 15 seconds of the memory's soundtrack. Saved preview links can
+   * expire, so a fresh one is fetched when needed (and once more if playback fails).
+   */
+  const startPlayback = async (music, { retry = true, force = false } = {}) => {
+    stopAudioPlayback();
+    const myToken = ++playbackTokenRef.current;
 
-    let playerInstance = null;
+    const url = await resolvePreviewUrl(music, { force });
+    // The screen closed, or another playback started, while the link was resolving.
+    if (!url || myToken !== playbackTokenRef.current) return;
 
     try {
-      stopAudioPlayback();
+      const player = createAudioPlayer(url);
+      soundRef.current = player;
+      let started = false;
 
-      playerInstance = createAudioPlayer(audioUrl);
-      soundRef.current = playerInstance;
-      playerInstance.play();
+      player.addListener('playbackStatusUpdate', (status) => {
+        try {
+          if (soundRef.current !== player) return;
+          const posMs =
+            status.positionMillis !== undefined
+              ? status.positionMillis
+              : status.currentTime
+              ? status.currentTime * 1000
+              : 0;
+          if (posMs) {
+            started = true;
+            setPlaybackSeconds(Math.min(15, Math.floor(posMs / 1000)));
+            if (posMs >= 15000) stopAudioPlayback();
+          }
+          if (status.didJustFinish) stopAudioPlayback();
+        } catch (e) {}
+      });
+
+      player.play();
       setIsPlayingAudio(true);
       setPlaybackSeconds(0);
 
-      // Status listener tracking 0 to 15 seconds
-      playerInstance.addListener('playbackStatusUpdate', (status) => {
-        if (status.positionMillis) {
-          const sec = Math.min(15, Math.floor(status.positionMillis / 1000));
-          setPlaybackSeconds(sec);
-          if (status.positionMillis >= 15000) {
-            playerInstance.pause();
-            setIsPlayingAudio(false);
+      // Strict 15-second cut-off
+      autoPlayTimerRef.current = setTimeout(() => stopAudioPlayback(), 15000);
+
+      // If nothing has played after a few seconds the link is probably dead: refresh once.
+      if (retry) {
+        setTimeout(() => {
+          if (soundRef.current === player && !started) {
+            startPlayback(music, { retry: false, force: true });
           }
-        }
-        if (status.didJustFinish) {
-          setIsPlayingAudio(false);
-        }
-      });
-
-      // Strict 15-second cut-off timer
-      autoPlayTimerRef.current = setTimeout(() => {
-        if (playerInstance) {
-          playerInstance.pause();
-          setIsPlayingAudio(false);
-        }
-      }, 15000);
+        }, 4000);
+      }
     } catch (e) {
-      console.warn('Auto-play 15s soundtrack error', e);
+      console.warn('Soundtrack playback error', e);
+      stopAudioPlayback();
     }
+  };
 
+  // Auto-play the soundtrack when the memory opens
+  useEffect(() => {
+    if (!post?.music?.audioUrl) return undefined;
+    startPlayback(post.music);
     return () => {
+      playbackTokenRef.current += 1;
       stopAudioPlayback();
     };
   }, [post?.music?.audioUrl]);
@@ -170,57 +187,26 @@ export function DateDetailsScreen({
       autoPlayTimerRef.current = null;
     }
     if (soundRef.current) {
-      soundRef.current.pause();
-      soundRef.current.release();
+      try {
+        soundRef.current.pause();
+      } catch (e) {}
+      try {
+        soundRef.current.release();
+      } catch (e) {}
       soundRef.current = null;
     }
     setIsPlayingAudio(false);
   };
 
-  // Toggle or replay the 15-second music preview
-  const handleToggleAudio = async () => {
-    const audioUrl = post?.music?.audioUrl;
-    if (!audioUrl) return;
-
-    try {
-      if (isPlayingAudio && soundRef.current) {
-        soundRef.current.pause();
-        if (autoPlayTimerRef.current) clearTimeout(autoPlayTimerRef.current);
-        setIsPlayingAudio(false);
-        return;
-      }
-
+  // Pause, or replay the 15-second preview from the start
+  const handleToggleAudio = () => {
+    if (!post?.music?.audioUrl) return;
+    if (isPlayingAudio) {
+      playbackTokenRef.current += 1;
       stopAudioPlayback();
-
-      const player = createAudioPlayer(audioUrl);
-      soundRef.current = player;
-      player.play();
-      setIsPlayingAudio(true);
-      setPlaybackSeconds(0);
-
-      autoPlayTimerRef.current = setTimeout(() => {
-        if (soundRef.current) {
-          soundRef.current.pause();
-          setIsPlayingAudio(false);
-        }
-      }, 15000);
-
-      player.addListener('playbackStatusUpdate', (status) => {
-        if (status.positionMillis) {
-          const sec = Math.min(15, Math.floor(status.positionMillis / 1000));
-          setPlaybackSeconds(sec);
-          if (status.positionMillis >= 15000) {
-            player.pause();
-            setIsPlayingAudio(false);
-          }
-        }
-        if (status.didJustFinish) {
-          setIsPlayingAudio(false);
-        }
-      });
-    } catch (err) {
-      console.warn('Audio playback error', err);
+      return;
     }
+    startPlayback(post.music);
   };
 
   const handleDelete = () => {
@@ -237,8 +223,9 @@ export function DateDetailsScreen({
             setIsDeleting(true);
             try {
               await postAPI.deletePost(postId, token);
+              await updateCachedPosts((posts) => posts.filter((p) => p._id !== postId));
               try {
-                Vibration.vibrate(30);
+                haptics.success();
               } catch (e) {}
               if (onDeleteSuccess) {
                 onDeleteSuccess();
@@ -258,7 +245,7 @@ export function DateDetailsScreen({
   const handleShare = async () => {
     try {
       try {
-        Vibration.vibrate(20);
+        haptics.select();
       } catch (e) {}
 
       const dateStr = post.date
@@ -291,83 +278,23 @@ export function DateDetailsScreen({
   };
 
   const openEditModal = () => {
-    setEditVenue(post.venue || '');
-    setEditDate(post.date ? new Date(post.date) : new Date());
-    setEditDescription(post.description || '');
-    setEditCategory(post.category || '');
-    setEditMood(post.mood || '');
-    setEditRating(post.rating || 5);
-    setEditSelectedSong(
-      post.music?.audioUrl
-        ? {
-            preview: post.music.audioUrl,
-            title: post.music.title || 'Soundtrack',
-            artist: post.music.artist || '',
-            albumCover: post.music.albumCover || null,
-          }
-        : null
-    );
-    setEditMusicResults([]);
-    setEditMusicQuery('');
+    stopAudioPlayback();
     setEditModalVisible(true);
   };
 
-  const handleSearchEditMusic = async () => {
-    if (!editMusicQuery.trim()) return;
-    setIsSearchingEditMusic(true);
-    try {
-      const results = await searchDeezerTracks(editMusicQuery.trim());
-      setEditMusicResults(results);
-    } catch (e) {
-      setEditMusicResults([]);
-    } finally {
-      setIsSearchingEditMusic(false);
-    }
+  const handleEditSaved = (updatedPost) => {
+    if (!updatedPost) return;
+    setPost(updatedPost);
+    setActiveImageIndex(0);
+    flatListRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+    updateCachedPosts((posts) =>
+      posts.map((p) => (p._id === postId ? { ...p, ...updatedPost } : p))
+    );
   };
 
-  const handleSaveEdit = async () => {
-    if (!editVenue.trim()) {
-      Alert.alert('Venue Required', 'Please provide a venue name.');
-      return;
-    }
-
-    setIsSavingEdit(true);
-    try {
-      const payload = {
-        venue: editVenue.trim(),
-        date: editDate.toISOString().split('T')[0],
-        description: editDescription.trim(),
-        category: editCategory,
-        mood: editMood,
-        rating: editRating,
-      };
-
-      if (editSelectedSong) {
-        payload.music = {
-          audioUrl: editSelectedSong.preview,
-          title: editSelectedSong.title,
-          artist: editSelectedSong.artist,
-          albumCover: editSelectedSong.albumCover,
-          duration: 15,
-        };
-      }
-
-      const res = await postAPI.updatePost(postId, payload, token);
-      if (res?.post) {
-        setPost(res.post);
-      } else {
-        setPost((prev) => ({ ...prev, ...payload }));
-      }
-      try {
-        Vibration.vibrate(25);
-      } catch (e) {}
-      setEditModalVisible(false);
-    } catch (err) {
-      Alert.alert('Save Failed', err.message || 'Could not update date memory.');
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
+  // Either partner can edit a shared memory; only the one who created it can delete it.
+  const creatorId = post?.createdBy?._id || post?.createdBy?.id || post?.createdBy;
+  const canDelete = !creatorId || !user?.id || String(creatorId) === String(user.id);
 
   const images = post?.images?.length
     ? post.images
@@ -458,6 +385,7 @@ export function DateDetailsScreen({
             <Edit3 size={16} color={colors.textDark} />
           </TouchableOpacity>
 
+          {canDelete ? (
           <TouchableOpacity
             style={[styles.navBtn, styles.deleteNavBtn]}
             onPress={handleDelete}
@@ -470,6 +398,7 @@ export function DateDetailsScreen({
               <Trash2 size={16} color={colors.danger} />
             )}
           </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -479,9 +408,9 @@ export function DateDetailsScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* Scrapbook Details Card */}
-        <View style={styles.detailsCard}>
+        <FadeInView distance={30} style={styles.detailsCard}>
           {/* 1. CAROUSEL OF PHOTOS */}
-          <View style={styles.carouselContainer}>
+          <FadeInView from="scale" delay={60} style={styles.carouselContainer}>
             {images.length > 0 ? (
               <View>
                 <FlatList
@@ -504,7 +433,8 @@ export function DateDetailsScreen({
                       <Image
                         source={{ uri: item }}
                         style={styles.carouselImage}
-                        resizeMode="cover"
+                        contentFit="cover"
+                        transition={250}
                       />
                       <View style={styles.zoomHintPill}>
                         <Maximize2 size={12} color="#ffffff" />
@@ -545,16 +475,16 @@ export function DateDetailsScreen({
                 <Text style={styles.noPhotoText}>No photo attached</Text>
               </View>
             )}
-          </View>
+          </FadeInView>
 
           {/* 2. TITLE (VENUE) */}
-          <View style={styles.titleSection}>
-            <MapPin size={22} color={colors.primary} style={{ marginTop: 2 }} />
+          <FadeInView delay={140} style={styles.titleSection}>
+            <MapPin size={22} color={colors.primary} style={{ marginTop: 4 }} />
             <Text style={styles.venueTitle}>{post.venue || 'Unnamed Venue'}</Text>
-          </View>
+          </FadeInView>
 
           {/* 3. METADATA BADGES (DATE, CATEGORY, MOOD, RATING) */}
-          <View style={styles.metaRow}>
+          <FadeInView delay={190} style={styles.metaRow}>
             <View style={styles.dateBadge}>
               <Calendar size={13} color={colors.primary} />
               <Text style={styles.dateText}>{formattedDate}</Text>
@@ -573,25 +503,26 @@ export function DateDetailsScreen({
                 <Text style={styles.moodBadgeText}>{post.mood}</Text>
               </View>
             ) : null}
-          </View>
+          </FadeInView>
 
           {/* Heart Rating */}
           {post.rating ? (
-            <View style={styles.ratingSection}>
+            <FadeInView delay={230} style={styles.ratingSection}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <Heart
-                  key={star}
-                  size={18}
-                  color={colors.primary}
-                  fill={star <= post.rating ? colors.primary : 'transparent'}
-                />
+                <FadeInView key={star} from="scale" delay={280 + star * 70}>
+                  <Heart
+                    size={18}
+                    color={colors.primary}
+                    fill={star <= post.rating ? colors.primary : 'transparent'}
+                  />
+                </FadeInView>
               ))}
               <Text style={styles.ratingLabel}>{post.rating} / 5 Hearts</Text>
-            </View>
+            </FadeInView>
           ) : null}
 
           {/* 4. DESCRIPTION */}
-          <View style={styles.descriptionSection}>
+          <FadeInView delay={270} style={styles.descriptionSection}>
             <View style={styles.descHeader}>
               <FileText size={15} color={colors.primary} />
               <Text style={styles.descHeaderText}>Journal Notes & Memories</Text>
@@ -601,17 +532,19 @@ export function DateDetailsScreen({
                 {post.description || 'No description recorded for this date.'}
               </Text>
             </View>
-          </View>
+          </FadeInView>
 
           {/* 5. 15-SECOND DEEZER SOUNDTRACK PLAYER */}
           {post.music?.audioUrl ? (
-            <View style={styles.soundtrackBox}>
+            <FadeInView delay={330} style={styles.soundtrackBox}>
               <View style={styles.soundtrackHeaderRow}>
                 {post.music?.albumCover ? (
-                  <Image
-                    source={{ uri: post.music.albumCover }}
-                    style={styles.soundtrackCover}
-                  />
+                  <PulseView active={isPlayingAudio} scale={1.05} period={1200}>
+                    <Image
+                      source={{ uri: post.music.albumCover }}
+                      style={styles.soundtrackCover}
+                    />
+                  </PulseView>
                 ) : (
                   <View style={styles.soundtrackCoverPlaceholder}>
                     <Disc size={22} color={colors.primary} />
@@ -642,49 +575,46 @@ export function DateDetailsScreen({
                 </View>
 
                 {/* Play / Pause Toggle Button */}
-                <TouchableOpacity
+                <PressableScale
                   style={[
                     styles.soundtrackActionBtn,
                     isPlayingAudio && styles.soundtrackActionBtnActive,
                   ]}
                   onPress={handleToggleAudio}
-                  activeOpacity={0.8}
+                  haptic="select"
+                  scaleTo={0.85}
                 >
-                  {isPlayingAudio ? (
-                    <Pause size={18} color="#ffffff" />
-                  ) : (
-                    <Play size={18} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
+                  <FadeInView key={isPlayingAudio ? 'pause' : 'play'} from="scale">
+                    {isPlayingAudio ? (
+                      <Pause size={18} color="#ffffff" />
+                    ) : (
+                      <Play size={18} color={colors.primary} />
+                    )}
+                  </FadeInView>
+                </PressableScale>
               </View>
 
               {/* 15-Second Progress Bar */}
-              <View style={styles.soundtrackProgressTrack}>
-                <View
-                  style={[
-                    styles.soundtrackProgressFill,
-                    { width: `${progressPercent}%` },
-                  ]}
-                />
-              </View>
-            </View>
+              <ProgressBar
+                percent={progressPercent}
+                min={0}
+                trackStyle={styles.soundtrackProgressTrack}
+                fillStyle={styles.soundtrackProgressFill}
+              />
+            </FadeInView>
           ) : null}
 
           {/* Footer & Share CTA */}
-          <View style={styles.footerSection}>
-            <TouchableOpacity
-              style={styles.shareMemoryBtn}
-              onPress={handleShare}
-              activeOpacity={0.85}
-            >
+          <FadeInView delay={380} style={styles.footerSection}>
+            <PressableScale style={styles.shareMemoryBtn} onPress={handleShare} haptic={null}>
               <Share2 size={14} color={colors.primary} />
               <Text style={styles.shareMemoryBtnText}>Share Date Recap ♡</Text>
-            </TouchableOpacity>
+            </PressableScale>
             <Text style={styles.authorText}>
               Preserved by {post.createdBy?.email || 'You'}
             </Text>
-          </View>
-        </View>
+          </FadeInView>
+        </FadeInView>
       </ScrollView>
 
       {/* FULL-SCREEN LIGHTBOX MODAL */}
@@ -699,214 +629,55 @@ export function DateDetailsScreen({
             <Text style={styles.lightboxCounter}>
               {lightboxIndex + 1} of {images.length}
             </Text>
-            <TouchableOpacity
+            <PressableScale
               style={styles.lightboxCloseBtn}
               onPress={() => setLightboxVisible(false)}
             >
               <X size={24} color="#ffffff" />
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
           {images.length > 0 && (
-            <Image
-              source={{ uri: images[lightboxIndex] }}
-              style={styles.lightboxImage}
-              resizeMode="contain"
-            />
+            <FadeInView key={lightboxIndex} from="scale" style={styles.lightboxImage}>
+              <Image
+                source={{ uri: images[lightboxIndex] }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="contain"
+                transition={150}
+              />
+            </FadeInView>
           )}
 
           {images.length > 1 && (
             <View style={styles.lightboxBottomBar}>
-              <TouchableOpacity
+              <PressableScale
                 style={styles.lightboxNavBtn}
                 onPress={() =>
                   setLightboxIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
                 }
               >
                 <Text style={styles.lightboxNavText}>‹ Previous</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </PressableScale>
+              <PressableScale
                 style={styles.lightboxNavBtn}
                 onPress={() =>
                   setLightboxIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
                 }
               >
                 <Text style={styles.lightboxNavText}>Next ›</Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
           )}
         </View>
       </Modal>
 
-      {/* EDIT MEMORY MODAL */}
-      <Modal
+      <EditMemoryModal
         visible={editModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Date Memory</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <X size={20} color={colors.textDark} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Venue */}
-              <View style={styles.editInputGroup}>
-                <Text style={styles.editLabel}>Venue</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={editVenue}
-                  onChangeText={setEditVenue}
-                />
-              </View>
-
-              {/* Date */}
-              <View style={styles.editInputGroup}>
-                <Text style={styles.editLabel}>Date</Text>
-                <TouchableOpacity
-                  style={styles.editDateBtn}
-                  onPress={() => setEditShowDatePicker(true)}
-                >
-                  <Text style={styles.editDateText}>
-                    {editDate.toLocaleDateString()}
-                  </Text>
-                  <Calendar size={14} color={colors.primary} />
-                </TouchableOpacity>
-                {editShowDatePicker && (
-                  <DateTimePicker
-                    value={editDate}
-                    mode="date"
-                    display="default"
-                    onChange={(_, d) => {
-                      setEditShowDatePicker(false);
-                      if (d) setEditDate(d);
-                    }}
-                  />
-                )}
-              </View>
-
-              {/* Rating */}
-              <View style={styles.editInputGroup}>
-                <Text style={styles.editLabel}>Rating</Text>
-                <View style={styles.ratingRow}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity
-                      key={star}
-                      onPress={() => setEditRating(star)}
-                    >
-                      <Heart
-                        size={24}
-                        color={colors.primary}
-                        fill={star <= editRating ? colors.primary : 'transparent'}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Soundtrack (Deezer) */}
-              <View style={styles.editInputGroup}>
-                <Text style={styles.editLabel}>Deezer Soundtrack</Text>
-                {editSelectedSong ? (
-                  <View style={styles.editSongCard}>
-                    <Disc size={18} color={colors.primary} />
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={styles.editSongTitle} numberOfLines={1}>
-                        {editSelectedSong.title}
-                      </Text>
-                      <Text style={styles.editSongArtist} numberOfLines={1}>
-                        {editSelectedSong.artist}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setEditSelectedSong(null)}
-                      style={{ padding: 4 }}
-                    >
-                      <X size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View>
-                    <View style={styles.editMusicSearchRow}>
-                      <TextInput
-                        style={styles.editMusicInput}
-                        placeholder="Search Deezer song..."
-                        placeholderTextColor={colors.textMuted}
-                        value={editMusicQuery}
-                        onChangeText={setEditMusicQuery}
-                        onSubmitEditing={handleSearchEditMusic}
-                      />
-                      <TouchableOpacity
-                        style={styles.editSearchBtn}
-                        onPress={handleSearchEditMusic}
-                      >
-                        {isSearchingEditMusic ? (
-                          <ActivityIndicator size="small" color="#ffffff" />
-                        ) : (
-                          <Search size={14} color="#ffffff" />
-                        )}
-                      </TouchableOpacity>
-                    </View>
-
-                    {editMusicResults.map((t) => (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={styles.editMusicItem}
-                        onPress={() => {
-                          setEditSelectedSong(t);
-                          setEditMusicResults([]);
-                          setEditMusicQuery('');
-                        }}
-                      >
-                        <Text style={styles.editMusicItemText} numberOfLines={1}>
-                          {t.title} • {t.artist}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Description */}
-              <View style={styles.editInputGroup}>
-                <Text style={styles.editLabel}>Journal Notes</Text>
-                <TextInput
-                  style={[styles.editInput, styles.editTextArea]}
-                  value={editDescription}
-                  onChangeText={setEditDescription}
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveModalBtn}
-                onPress={handleSaveEdit}
-                disabled={isSavingEdit}
-              >
-                {isSavingEdit ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.saveModalBtnText}>Save Changes</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        post={post}
+        token={token}
+        onClose={() => setEditModalVisible(false)}
+        onSaved={handleEditSaved}
+      />
     </View>
   );
 }
@@ -1000,15 +771,11 @@ const getStyles = (colors, width, height) =>
     },
     detailsCard: {
       backgroundColor: colors.surface,
-      borderRadius: 20,
-      borderWidth: 2,
+      borderRadius: 28,
+      borderWidth: 1.5,
       borderColor: colors.cardBorder,
       padding: 16,
-      elevation: 4,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
+      ...shadow(2),
     },
     carouselContainer: {
       marginBottom: 16,
@@ -1095,11 +862,12 @@ const getStyles = (colors, width, height) =>
       marginBottom: 10,
     },
     venueTitle: {
-      fontSize: 22,
-      fontWeight: '800',
+      fontSize: 27,
+      fontFamily: fonts.displayHeavy,
+      fontWeight: 'normal',
       color: colors.textDark,
       flex: 1,
-      lineHeight: 28,
+      lineHeight: 35,
     },
     metaRow: {
       flexDirection: 'row',
@@ -1365,146 +1133,29 @@ const getStyles = (colors, width, height) =>
       fontSize: 14,
     },
     // Edit Modal styles
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'flex-end',
-    },
-    modalContent: {
-      backgroundColor: colors.surface,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 20,
-      maxHeight: height * 0.85,
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '800',
-      color: colors.textDark,
-    },
-    editInputGroup: {
-      marginBottom: 14,
-    },
-    editLabel: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.textDark,
+
+    // CENTERED MODAL FOR EDIT DEEZER MUSIC
+    centerSuggestionsTitle: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSubtle,
       marginBottom: 6,
     },
-    editInput: {
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
+    centerSuggestionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
       borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      fontSize: 14,
-      color: colors.textDark,
-    },
-    editTextArea: {
-      minHeight: 80,
-      textAlignVertical: 'top',
-    },
-    editDateBtn: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-    },
-    editDateText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.textDark,
-    },
-    editSongCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      borderRadius: 10,
-      padding: 8,
-    },
-    editSongTitle: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.textDark,
-    },
-    editSongArtist: {
-      fontSize: 10,
-      color: colors.textSubtle,
-    },
-    editMusicSearchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
       backgroundColor: colors.surfaceSubtle,
       borderWidth: 1,
       borderColor: colors.borderSubtle,
-      borderRadius: 10,
-      paddingHorizontal: 8,
     },
-    editMusicInput: {
-      flex: 1,
-      fontSize: 12,
-      color: colors.textDark,
-      paddingVertical: 6,
-    },
-    editSearchBtn: {
-      backgroundColor: colors.primary,
-      padding: 6,
-      borderRadius: 6,
-    },
-    editMusicItem: {
-      backgroundColor: colors.surfaceSubtle,
-      padding: 8,
-      borderRadius: 8,
-      marginTop: 4,
-    },
-    editMusicItemText: {
+    centerSuggestionPillText: {
       fontSize: 11,
       color: colors.textDark,
-    },
-    modalActions: {
-      flexDirection: 'row',
-      gap: 12,
-      marginTop: 16,
-    },
-    cancelModalBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceSubtle,
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
-    },
-    cancelModalBtnText: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: colors.textSubtle,
-    },
-    saveModalBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-    },
-    saveModalBtnText: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: '#ffffff',
+      fontWeight: '500',
     },
     ratingRow: {
       flexDirection: 'row',

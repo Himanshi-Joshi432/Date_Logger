@@ -9,10 +9,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { FadeInView, PressableScale, PulseView, ShakeView } from '../components/motion';
+import { haptics } from '../utils/haptics';
+import { fonts, gradients, shadow } from '../theme/tokens';
 
 export function RegisterScreen({ onNavigateLogin }) {
   const { colors } = useTheme();
@@ -50,11 +55,13 @@ export function RegisterScreen({ onNavigateLogin }) {
 
     try {
       await register(email.trim(), password);
+      haptics.success();
       setSuccessMsg('Account created successfully! You can now sign in.');
       setTimeout(() => {
         onNavigateLogin();
       }, 1500);
     } catch (err) {
+      haptics.error();
       setErrorMsg(err.message || 'Registration failed. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -70,7 +77,8 @@ export function RegisterScreen({ onNavigateLogin }) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.card}>
+        <ShakeView trigger={errorMsg}>
+        <FadeInView distance={40} style={styles.card}>
           {/* Decorative Paperclip */}
           <View style={styles.paperclipWrapper}>
             <View style={styles.paperclipInner} />
@@ -80,27 +88,31 @@ export function RegisterScreen({ onNavigateLogin }) {
           <View style={styles.washiTape} />
 
           {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.waxBadge}>
-              <Heart size={24} color={colors.primary} fill={colors.primary} />
-            </View>
+          <FadeInView delay={120} style={styles.header}>
+            <PulseView style={styles.waxBadge}>
+              <Image
+                source={require('../../assets/splash-icon.png')}
+                style={{ width: 38, height: 38 }}
+                resizeMode="contain"
+              />
+            </PulseView>
             <Text style={styles.title}>Begin Your Story</Text>
             <Text style={styles.subtitle}>
               Create an account to start documenting your shared dates
             </Text>
-          </View>
+          </FadeInView>
 
           {/* Alerts */}
           {errorMsg ? (
-            <View style={styles.errorBox}>
+            <FadeInView key={errorMsg} from="scale" style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMsg}</Text>
-            </View>
+            </FadeInView>
           ) : null}
 
           {successMsg ? (
-            <View style={styles.successBox}>
+            <FadeInView from="scale" style={styles.successBox}>
               <Text style={styles.successText}>{successMsg}</Text>
-            </View>
+            </FadeInView>
           ) : null}
 
           {/* Form Fields */}
@@ -164,12 +176,18 @@ export function RegisterScreen({ onNavigateLogin }) {
           </View>
 
           {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+          <PressableScale
+            style={[styles.submitShadow, isSubmitting && styles.submitBtnDisabled]}
             onPress={handleRegister}
             disabled={isSubmitting}
-            activeOpacity={0.85}
+            haptic="press"
           >
+            <LinearGradient
+              colors={gradients(colors).primary}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.submitBtn}
+            >
             {isSubmitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
@@ -178,7 +196,8 @@ export function RegisterScreen({ onNavigateLogin }) {
                 <ArrowRight size={18} color="#ffffff" />
               </>
             )}
-          </TouchableOpacity>
+          </LinearGradient>
+          </PressableScale>
 
           {/* Switch to Login */}
           <View style={styles.switchRow}>
@@ -187,7 +206,8 @@ export function RegisterScreen({ onNavigateLogin }) {
               <Text style={styles.switchLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </FadeInView>
+        </ShakeView>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -208,15 +228,11 @@ const getStyles = (colors) =>
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: 28,
     borderWidth: 1.5,
     borderColor: colors.cardBorder,
-    padding: 24,
-    shadowColor: colors.cardBorder,
-    shadowOffset: { width: 3, height: 5 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    padding: 26,
+    ...shadow(3),
     position: 'relative',
   },
   paperclipWrapper: {
@@ -271,8 +287,9 @@ const getStyles = (colors) =>
     marginBottom: 12,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 30,
+    fontFamily: fonts.displayHeavy,
+    fontWeight: 'normal',
     color: colors.textDark,
     marginBottom: 6,
     textAlign: 'center',
@@ -345,19 +362,18 @@ const getStyles = (colors) =>
   eyeBtn: {
     padding: 6,
   },
+  submitShadow: {
+    borderRadius: 16,
+    marginTop: 10,
+    ...shadow(2, colors.primary),
+  },
   submitBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    height: 50,
+    borderRadius: 16,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    gap: 8,
   },
   submitBtnDisabled: {
     opacity: 0.65,

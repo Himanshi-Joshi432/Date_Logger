@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,10 @@ import {
   Image,
   Platform,
   Alert,
-  Vibration,
+  LayoutAnimation,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { createAudioPlayer } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   MapPin,
@@ -31,37 +30,40 @@ import {
   Play,
   Pause,
   Heart,
-  Tag,
   Smile,
-  Search,
-  Check,
+  Tag,
   Disc,
+  Plus,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { haptics } from '../utils/haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  FadeInView,
+  PressableScale,
+  PulseView,
+  ShakeView,
+  ProgressBar,
+  staggerDelay,
+} from '../components/motion';
+import { fonts, gradients, shadow } from '../theme/tokens';
 import { postAPI } from '../services/api';
-import { searchDeezerTracks, POPULAR_DATE_SONGS } from '../services/musicService';
+import { toSavedMusic } from '../services/musicService';
+import { prepareImageForUpload, imageStillExists } from '../services/imageUtils';
+import { MusicSearchModal } from '../components/MusicSearchModal';
+import {
+  HeartRating,
+  ChipSelect,
+  MOOD_OPTIONS,
+  CATEGORY_OPTIONS,
+} from '../components/MemoryFields';
+import { useAudioPreview } from '../hooks/useAudioPreview';
+import { toLocalDateString } from '../utils/date';
 
 const DRAFT_STORAGE_KEY = 'date_logger_log_draft';
-
-const CATEGORIES = [
-  'Romantic Dinner',
-  'Cozy Cafe',
-  'Movie Night',
-  'Road Trip',
-  'Anniversary',
-  'First Date',
-  'Nature & Walks',
-  'Special Celebration',
-];
-
-const MOODS = [
-  { label: 'Romantic', icon: '🥰' },
-  { label: 'Magical', icon: '✨' },
-  { label: 'Fun & Laughs', icon: '😂' },
-  { label: 'Cozy', icon: '☕' },
-  { label: 'Fancy', icon: '🍷' },
-];
+const MAX_PHOTOS = 15; // matches the server limit
 
 export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' }) {
   const { token } = useAuth();
@@ -71,23 +73,21 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedMood, setSelectedMood] = useState('');
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(null);
+  const [mood, setMood] = useState('');
+  const [category, setCategory] = useState('');
 
   const [imageFiles, setImageFiles] = useState([]);
+  const [isPreparingPhotos, setIsPreparingPhotos] = useState(false);
 
-  // Deezer Music Search State
-  const [musicQuery, setMusicQuery] = useState('');
-  const [isSearchingMusic, setIsSearchingMusic] = useState(false);
-  const [musicResults, setMusicResults] = useState([]);
-  const [selectedSong, setSelectedSong] = useState(null); // { id, title, artist, albumCover, preview, duration }
-  const [showMusicSearch, setShowMusicSearch] = useState(false);
+  const [musicModalVisible, setMusicModalVisible] = useState(false);
+  const [selectedSong, setSelectedSong] = useState(null); // a music search result
 
-  // Audio preview state
-  const [soundPlayer, setSoundPlayer] = useState(null);
-  const [playingPreviewUrl, setPlayingPreviewUrl] = useState(null);
-  const previewTimerRef = useRef(null);
+  // Preview playback for the attached song
+  const songPreview = useAudioPreview();
+  const playingPreviewUrl = songPreview.playingKey;
+  const stopAudioPreview = songPreview.stop;
+  const toggleSongPreview = songPreview.toggle;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadPercent, setUploadPercent] = useState(0);
@@ -105,11 +105,17 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
           const draft = JSON.parse(stored);
           if (draft.venue) setVenue(draft.venue);
           if (draft.description) setDescription(draft.description);
-          if (draft.category) setSelectedCategory(draft.category);
-          if (draft.mood) setSelectedMood(draft.mood);
-          if (draft.rating) setRating(draft.rating);
           if (draft.date) setSelectedDate(new Date(draft.date));
           if (draft.selectedSong) setSelectedSong(draft.selectedSong);
+          if (draft.rating) setRating(draft.rating);
+          if (draft.mood) setMood(draft.mood);
+          if (draft.category) setCategory(draft.category);
+          if (Array.isArray(draft.imageFiles) && draft.imageFiles.length > 0) {
+            // Picked photos live in the app's cache; keep only the ones still there.
+            const checks = await Promise.all(draft.imageFiles.map((img) => imageStillExists(img?.uri)));
+            const surviving = draft.imageFiles.filter((_, i) => checks[i]);
+            if (surviving.length > 0) setImageFiles(surviving);
+          }
           setDraftRestored(true);
         }
       } catch (e) {}
@@ -124,15 +130,16 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
   // Auto-save draft
   useEffect(() => {
     async function saveDraft() {
-      if (venue || description || selectedCategory || selectedMood || selectedSong) {
+      if (venue || description || selectedSong || rating || mood || category || imageFiles.length > 0) {
         try {
           const draft = {
             venue,
             description,
-            category: selectedCategory,
-            mood: selectedMood,
-            rating,
             selectedSong,
+            rating,
+            mood,
+            category,
+            imageFiles,
             date: selectedDate.toISOString(),
           };
           await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
@@ -141,84 +148,12 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
     }
     const timeout = setTimeout(saveDraft, 800);
     return () => clearTimeout(timeout);
-  }, [venue, description, selectedCategory, selectedMood, rating, selectedDate, selectedSong]);
+  }, [venue, description, selectedDate, selectedSong, rating, mood, category, imageFiles]);
 
   const clearDraft = async () => {
     try {
       await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch (e) {}
-  };
-
-  const stopAudioPreview = () => {
-    if (previewTimerRef.current) {
-      clearTimeout(previewTimerRef.current);
-      previewTimerRef.current = null;
-    }
-    if (soundPlayer) {
-      soundPlayer.pause();
-      soundPlayer.release();
-      setSoundPlayer(null);
-    }
-    setPlayingPreviewUrl(null);
-  };
-
-  const toggleSongPreview = async (previewUrl) => {
-    if (!previewUrl) return;
-
-    if (playingPreviewUrl === previewUrl && soundPlayer) {
-      stopAudioPreview();
-      return;
-    }
-
-    stopAudioPreview();
-
-    try {
-      const player = createAudioPlayer(previewUrl);
-      player.play();
-      setSoundPlayer(player);
-      setPlayingPreviewUrl(previewUrl);
-
-      // Stop after 15 seconds
-      previewTimerRef.current = setTimeout(() => {
-        stopAudioPreview();
-      }, 15000);
-
-      player.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) {
-          stopAudioPreview();
-        }
-      });
-    } catch (e) {
-      console.warn('Audio preview error', e);
-      stopAudioPreview();
-    }
-  };
-
-  const handleSearchMusic = async (queryText) => {
-    const q = queryText !== undefined ? queryText : musicQuery;
-    if (!q || !q.trim()) return;
-
-    setIsSearchingMusic(true);
-    setShowMusicSearch(true);
-    try {
-      const results = await searchDeezerTracks(q);
-      setMusicResults(results);
-    } catch (e) {
-      setMusicResults([]);
-    } finally {
-      setIsSearchingMusic(false);
-    }
-  };
-
-  const handleSelectSong = (song) => {
-    try {
-      Vibration.vibrate(20);
-    } catch (e) {}
-    stopAudioPreview();
-    setSelectedSong(song);
-    setShowMusicSearch(false);
-    setMusicResults([]);
-    setMusicQuery('');
   };
 
   const handleRemoveSong = () => {
@@ -233,8 +168,25 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
     }
   };
 
+  /** Shrinks picked photos before they are attached, so uploads are fast. */
+  const addPickedAssets = async (assets) => {
+    setIsPreparingPhotos(true);
+    try {
+      const prepared = await Promise.all(assets.map((asset, idx) => prepareImageForUpload(asset, idx)));
+      setImageFiles((prev) => [...prev, ...prepared].slice(0, MAX_PHOTOS));
+      setErrorMsg('');
+    } finally {
+      setIsPreparingPhotos(false);
+    }
+  };
+
   // Gallery image selection
   const pickFromGallery = async () => {
+    const remaining = MAX_PHOTOS - imageFiles.length;
+    if (remaining <= 0) {
+      setErrorMsg(`A memory can hold up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -245,17 +197,12 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
-        quality: 0.8,
+        selectionLimit: remaining,
+        quality: 1,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newImages = result.assets.map((asset, idx) => ({
-          uri: asset.uri,
-          name: asset.fileName || `date-memory-${Date.now()}-${idx}.jpg`,
-          type: asset.mimeType || 'image/jpeg',
-        }));
-        setImageFiles((prev) => [...prev, ...newImages]);
-        setErrorMsg('');
+        await addPickedAssets(result.assets);
       }
     } catch (err) {
       setErrorMsg('Failed to select photos from gallery');
@@ -264,6 +211,10 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
   // Camera capture
   const takePhoto = async () => {
+    if (imageFiles.length >= MAX_PHOTOS) {
+      setErrorMsg(`A memory can hold up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -273,20 +224,11 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.8,
+        quality: 1,
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        setImageFiles((prev) => [
-          ...prev,
-          {
-            uri: asset.uri,
-            name: asset.fileName || `camera-${Date.now()}.jpg`,
-            type: asset.mimeType || 'image/jpeg',
-          },
-        ]);
-        setErrorMsg('');
+        await addPickedAssets([result.assets[0]]);
       }
     } catch (err) {
       setErrorMsg('Failed to capture photo with camera');
@@ -294,14 +236,8 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
   };
 
   const handleRemoveImage = (indexToRemove) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setImageFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-  };
-
-  const handleSelectRating = (val) => {
-    try {
-      Vibration.vibrate(15);
-    } catch (e) {}
-    setRating(val);
   };
 
   const handleSubmit = async () => {
@@ -318,18 +254,20 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
       return;
     }
 
+    if (isPreparingPhotos) {
+      setErrorMsg('Your photos are still being prepared. Try again in a moment.');
+      return;
+    }
+
     setIsSubmitting(true);
     setUploadPercent(0);
 
     try {
-      const dateString = selectedDate.toISOString().split('T')[0];
+      const dateString = toLocalDateString(selectedDate);
       const formData = new FormData();
       formData.append('venue', venue.trim());
       formData.append('date', dateString);
       formData.append('description', description.trim());
-      if (selectedCategory) formData.append('category', selectedCategory);
-      if (selectedMood) formData.append('mood', selectedMood);
-      if (rating) formData.append('rating', String(rating));
 
       // Append multiple images
       imageFiles.forEach((img, idx) => {
@@ -340,24 +278,14 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         });
       });
 
-      // Append Deezer soundtrack metadata
-      if (selectedSong?.preview) {
-        formData.append('audioUrl', selectedSong.preview);
-        formData.append('songTitle', selectedSong.title || '');
-        formData.append('songArtist', selectedSong.artist || '');
-        if (selectedSong.albumCover) {
-          formData.append('albumCover', selectedSong.albumCover);
-        }
-        formData.append(
-          'music',
-          JSON.stringify({
-            audioUrl: selectedSong.preview,
-            title: selectedSong.title,
-            artist: selectedSong.artist,
-            albumCover: selectedSong.albumCover,
-            duration: 15,
-          })
-        );
+      if (rating) formData.append('rating', String(rating));
+      if (mood) formData.append('mood', mood);
+      if (category) formData.append('category', category);
+
+      // Soundtrack, including the track id so its preview link can be refreshed later
+      const music = toSavedMusic(selectedSong);
+      if (music) {
+        formData.append('music', JSON.stringify(music));
       }
 
       await postAPI.createPost(formData, token, (percent) => {
@@ -365,7 +293,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
       });
 
       try {
-        Vibration.vibrate([0, 50, 70, 50]);
+        haptics.success();
       } catch (e) {}
 
       setSuccessMsg('Date memory saved successfully! ♡');
@@ -373,9 +301,10 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
       setVenue('');
       setDescription('');
-      setSelectedCategory('');
-      setSelectedMood('');
       setSelectedDate(new Date());
+      setRating(null);
+      setMood('');
+      setCategory('');
       setImageFiles([]);
       handleRemoveSong();
 
@@ -400,6 +329,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
   const styles = getStyles(colors);
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
@@ -419,42 +349,44 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
       </View>
 
       {/* Main Journal Card */}
-      <View style={styles.card}>
+      <FadeInView distance={30} style={styles.card}>
         <View style={styles.header}>
-          <View style={styles.sparkleBadge}>
+          <PulseView style={styles.sparkleBadge}>
             <Sparkles size={24} color={colors.primary} />
-          </View>
+          </PulseView>
           <Text style={styles.title}>Preserve a Date</Text>
           <Text style={styles.subtitle}>
-            Capture the feelings, music & snapshots of your special moment
+            Capture the moments, photos & soundtrack of your special time together
           </Text>
         </View>
 
         {/* Draft Restored Banner */}
         {draftRestored ? (
-          <View style={styles.draftBox}>
+          <FadeInView from="scale" delay={200} style={styles.draftBox}>
             <Sparkles size={14} color={colors.primary} />
             <Text style={styles.draftText}>Restored your unsaved draft</Text>
-          </View>
+          </FadeInView>
         ) : null}
 
         {/* Feedback Messages */}
         {errorMsg ? (
-          <View style={styles.errorBox}>
-            <AlertCircle size={16} color={colors.danger} />
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
+          <ShakeView trigger={errorMsg}>
+            <FadeInView key={errorMsg} from="scale" style={styles.errorBox}>
+              <AlertCircle size={16} color={colors.danger} />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </FadeInView>
+          </ShakeView>
         ) : null}
 
         {successMsg ? (
-          <View style={styles.successBox}>
+          <FadeInView from="scale" style={styles.successBox}>
             <CheckCircle2 size={16} color={colors.success} />
             <Text style={styles.successText}>{successMsg}</Text>
-          </View>
+          </FadeInView>
         ) : null}
 
         {/* 1. Venue Input */}
-        <View style={styles.inputGroup}>
+        <FadeInView delay={staggerDelay(1, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <MapPin size={16} color={colors.primary} />
             <Text style={styles.label}>Venue / Place</Text>
@@ -467,23 +399,23 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
             value={venue}
             onChangeText={setVenue}
           />
-        </View>
+        </FadeInView>
 
         {/* 2. Date Picker */}
-        <View style={styles.inputGroup}>
+        <FadeInView delay={staggerDelay(2, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <CalendarIcon size={16} color={colors.primary} />
             <Text style={styles.label}>Date of Outing</Text>
             <Text style={styles.required}>*</Text>
           </View>
-          <TouchableOpacity
+          <PressableScale
             style={styles.datePickerBtn}
             onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.8}
+            haptic="select"
           >
             <Text style={styles.datePickerText}>{formattedDate}</Text>
             <CalendarIcon size={16} color={colors.textSubtle} />
-          </TouchableOpacity>
+          </PressableScale>
 
           {showDatePicker && (
             <DateTimePicker
@@ -494,97 +426,17 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
               maximumDate={new Date()}
             />
           )}
-        </View>
+        </FadeInView>
 
-        {/* 3. Category Chips */}
-        <View style={styles.inputGroup}>
-          <View style={styles.labelRow}>
-            <Tag size={16} color={colors.primary} />
-            <Text style={styles.label}>Category</Text>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScroll}
-          >
-            {CATEGORIES.map((cat) => {
-              const isSelected = selectedCategory === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => setSelectedCategory(isSelected ? '' : cat)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* 4. Mood Selector */}
-        <View style={styles.inputGroup}>
-          <View style={styles.labelRow}>
-            <Smile size={16} color={colors.primary} />
-            <Text style={styles.label}>Mood & Vibe</Text>
-          </View>
-          <View style={styles.moodRow}>
-            {MOODS.map((m) => {
-              const isSelected = selectedMood === m.label;
-              return (
-                <TouchableOpacity
-                  key={m.label}
-                  style={[styles.moodBtn, isSelected && styles.moodBtnActive]}
-                  onPress={() => setSelectedMood(isSelected ? '' : m.label)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.moodEmoji}>{m.icon}</Text>
-                  <Text style={[styles.moodLabel, isSelected && styles.moodLabelActive]}>
-                    {m.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* 5. Heart Rating */}
-        <View style={styles.inputGroup}>
-          <View style={styles.labelRow}>
-            <Heart size={16} color={colors.primary} />
-            <Text style={styles.label}>Date Rating</Text>
-          </View>
-          <View style={styles.ratingRow}>
-            {[1, 2, 3, 4, 5].map((star) => (
-              <TouchableOpacity
-                key={star}
-                onPress={() => handleSelectRating(star)}
-                activeOpacity={0.7}
-                style={styles.ratingHeartBtn}
-              >
-                <Heart
-                  size={28}
-                  color={colors.primary}
-                  fill={star <= rating ? colors.primary : 'transparent'}
-                />
-              </TouchableOpacity>
-            ))}
-            <Text style={styles.ratingScore}>{rating} / 5 Hearts</Text>
-          </View>
-        </View>
-
-        {/* 6. Description / Journal Note */}
-        <View style={styles.inputGroup}>
+        {/* 3. Description / Journal Note */}
+        <FadeInView delay={staggerDelay(3, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <FileText size={16} color={colors.primary} />
             <Text style={styles.label}>Journal Note</Text>
           </View>
           <TextInput
             style={[styles.input, styles.textArea]}
-            placeholder="What made this moment unforgettable? The laughter, food, playlist..."
+            placeholder="What made this moment unforgettable? The laughter, food, conversations..."
             placeholderTextColor={colors.textMuted}
             value={description}
             onChangeText={setDescription}
@@ -592,18 +444,43 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
             numberOfLines={4}
             textAlignVertical="top"
           />
-        </View>
+        </FadeInView>
 
-        {/* 7. DEEZER MUSIC SOUNDTRACK SEARCH & ATTACH */}
-        <View style={styles.inputGroup}>
+        {/* How it felt: rating, mood, kind of date */}
+        <FadeInView delay={staggerDelay(3, 80, 70)} style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Heart size={16} color={colors.primary} />
+            <Text style={styles.label}>How was it?</Text>
+          </View>
+          <HeartRating value={rating} onChange={setRating} />
+        </FadeInView>
+
+        <FadeInView delay={staggerDelay(3, 80, 70)} style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Smile size={16} color={colors.primary} />
+            <Text style={styles.label}>Mood</Text>
+          </View>
+          <ChipSelect options={MOOD_OPTIONS} value={mood} onChange={setMood} />
+        </FadeInView>
+
+        <FadeInView delay={staggerDelay(4, 80, 70)} style={styles.inputGroup}>
+          <View style={styles.labelRow}>
+            <Tag size={16} color={colors.primary} />
+            <Text style={styles.label}>Kind of date</Text>
+          </View>
+          <ChipSelect options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
+        </FadeInView>
+
+        {/* 4. MEMORY SOUNDTRACK (DEEZER 15s) WITH POP-UP WINDOW */}
+        <FadeInView delay={staggerDelay(4, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <Disc size={16} color={colors.primary} />
-            <Text style={styles.label}>Memory Soundtrack (Deezer 15s)</Text>
+            <Text style={styles.label}>Memory Soundtrack</Text>
           </View>
 
-          {/* Selected Song Preview Card */}
           {selectedSong ? (
-            <View style={styles.selectedSongCard}>
+            /* Selected Song Card */
+            <FadeInView key={selectedSong.preview} from="scale" style={styles.selectedSongCard}>
               {selectedSong.albumCover ? (
                 <Image
                   source={{ uri: selectedSong.albumCover }}
@@ -640,144 +517,50 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
               </TouchableOpacity>
 
               <TouchableOpacity
+                style={styles.changeSongBtn}
+                onPress={() => {
+                  stopAudioPreview();
+                  setMusicModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <RefreshCw size={14} color={colors.primary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.removeSongBtn}
                 onPress={handleRemoveSong}
                 activeOpacity={0.7}
               >
-                <X size={18} color={colors.danger} />
+                <X size={16} color={colors.danger} />
               </TouchableOpacity>
-            </View>
+            </FadeInView>
           ) : (
-            <View>
-              {/* Search input for Deezer */}
-              <View style={styles.musicSearchRow}>
-                <Search size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
-                <TextInput
-                  style={styles.musicInput}
-                  placeholder="Search artist or song (e.g. Coldplay, Perfect)..."
-                  placeholderTextColor={colors.textMuted}
-                  value={musicQuery}
-                  onChangeText={setMusicQuery}
-                  onSubmitEditing={() => handleSearchMusic()}
-                  returnKeyType="search"
-                />
-                {musicQuery ? (
-                  <TouchableOpacity
-                    onPress={() => setMusicQuery('')}
-                    style={{ padding: 4 }}
-                  >
-                    <X size={16} color={colors.textSubtle} />
-                  </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  style={styles.searchActionBtn}
-                  onPress={() => handleSearchMusic()}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.searchActionBtnText}>Search</Text>
-                </TouchableOpacity>
+            /* Button that opens the Deezer Music Pop-up Window */
+            <PressableScale
+              style={styles.openMusicModalBtn}
+              onPress={() => {
+                stopAudioPreview();
+                setMusicModalVisible(true);
+              }}
+              scaleTo={0.97}
+            >
+              <View style={styles.openMusicIconCircle}>
+                <Disc size={20} color={colors.primary} />
               </View>
-
-              {/* Quick Popular Suggestions */}
-              {!showMusicSearch && (
-                <View style={styles.popularSongsWrap}>
-                  <Text style={styles.popularLabel}>Popular Date Songs:</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 6 }}
-                  >
-                    {POPULAR_DATE_SONGS.map((songName) => (
-                      <TouchableOpacity
-                        key={songName}
-                        style={styles.popularPill}
-                        onPress={() => {
-                          setMusicQuery(songName);
-                          handleSearchMusic(songName);
-                        }}
-                      >
-                        <Music size={11} color={colors.primary} />
-                        <Text style={styles.popularPillText}>{songName}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Search Results List */}
-              {isSearchingMusic ? (
-                <View style={styles.musicLoadingWrap}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.musicLoadingText}>Searching Deezer catalog...</Text>
-                </View>
-              ) : (
-                showMusicSearch && (
-                  <View style={styles.musicResultsList}>
-                    {musicResults.length === 0 ? (
-                      <Text style={styles.noMusicFound}>
-                        No tracks found with preview. Try searching another song or artist.
-                      </Text>
-                    ) : (
-                      musicResults.map((track) => {
-                        const isPreviewPlaying = playingPreviewUrl === track.preview;
-                        return (
-                          <View key={track.id} style={styles.trackResultItem}>
-                            {track.albumCover ? (
-                              <Image
-                                source={{ uri: track.albumCover }}
-                                style={styles.trackThumb}
-                              />
-                            ) : (
-                              <View style={styles.trackThumbPlaceholder}>
-                                <Music size={16} color={colors.primary} />
-                              </View>
-                            )}
-
-                            <View style={styles.trackDetails}>
-                              <Text style={styles.trackTitle} numberOfLines={1}>
-                                {track.title}
-                              </Text>
-                              <Text style={styles.trackArtist} numberOfLines={1}>
-                                {track.artist}
-                              </Text>
-                            </View>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.trackPreviewBtn,
-                                isPreviewPlaying && styles.trackPreviewBtnActive,
-                              ]}
-                              onPress={() => toggleSongPreview(track.preview)}
-                              activeOpacity={0.7}
-                            >
-                              {isPreviewPlaying ? (
-                                <Pause size={14} color="#ffffff" />
-                              ) : (
-                                <Play size={14} color={colors.primary} />
-                              )}
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={styles.trackSelectBtn}
-                              onPress={() => handleSelectSong(track)}
-                              activeOpacity={0.8}
-                            >
-                              <Check size={14} color="#ffffff" />
-                              <Text style={styles.trackSelectBtnText}>Attach</Text>
-                            </TouchableOpacity>
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
-                )
-              )}
-            </View>
+              <View style={styles.openMusicTextWrap}>
+                <Text style={styles.openMusicTitle}>Add a Soundtrack</Text>
+                <Text style={styles.openMusicSub}>
+                  Search songs & attach a 15-second memory preview
+                </Text>
+              </View>
+              <Plus size={18} color={colors.primary} />
+            </PressableScale>
           )}
-        </View>
+        </FadeInView>
 
-        {/* 8. Photo Uploads */}
-        <View style={styles.inputGroup}>
+        {/* 5. Photo Uploads */}
+        <FadeInView delay={staggerDelay(5, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
             <ImageIcon size={16} color={colors.primary} />
             <Text style={styles.label}>Photo Memories</Text>
@@ -786,77 +569,117 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
           {/* Action buttons */}
           <View style={styles.imageActionButtons}>
-            <TouchableOpacity
+            <PressableScale
               style={styles.pickerBtn}
               onPress={pickFromGallery}
-              activeOpacity={0.8}
+              haptic="select"
             >
               <ImageIcon size={18} color={colors.primary} />
               <Text style={styles.pickerBtnText}>Choose Gallery Photos</Text>
-            </TouchableOpacity>
+            </PressableScale>
 
-            <TouchableOpacity
+            <PressableScale
               style={styles.cameraBtn}
               onPress={takePhoto}
-              activeOpacity={0.8}
+              haptic="select"
             >
               <Camera size={18} color={colors.textDark} />
               <Text style={styles.cameraBtnText}>Take Photo</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
+
+          {isPreparingPhotos ? (
+            <FadeInView from="scale" style={styles.preparingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.preparingText}>Preparing photos...</Text>
+            </FadeInView>
+          ) : null}
 
           {/* Image Previews Grid */}
           {imageFiles.length > 0 && (
             <View style={styles.previewGrid}>
               {imageFiles.map((item, idx) => (
-                <View key={idx} style={styles.thumbnailWrapper}>
+                <FadeInView
+                  key={item.uri}
+                  from="scale"
+                  delay={Math.min(idx, 6) * 40}
+                  style={styles.thumbnailWrapper}
+                >
                   <Image source={{ uri: item.uri }} style={styles.thumbnail} />
-                  <TouchableOpacity
+                  <PressableScale
                     style={styles.removeImageBadge}
                     onPress={() => handleRemoveImage(idx)}
-                    activeOpacity={0.7}
+                    scaleTo={0.8}
+                    hitSlop={8}
                   >
                     <X size={12} color="#ffffff" />
-                  </TouchableOpacity>
-                </View>
+                  </PressableScale>
+                </FadeInView>
               ))}
             </View>
           )}
-        </View>
+        </FadeInView>
 
         {/* Upload Progress Bar */}
         {isSubmitting && (
-          <View style={styles.progressContainer}>
+          <FadeInView from="scale" style={styles.progressContainer}>
             <View style={styles.progressHeader}>
               <Text style={styles.progressTitle}>Saving memory...</Text>
               <Text style={styles.progressPercent}>{uploadPercent}%</Text>
             </View>
-            <View style={styles.progressBarTrack}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: `${Math.max(uploadPercent, 8)}%` },
-                ]}
-              />
-            </View>
-          </View>
+            <ProgressBar
+              percent={uploadPercent}
+              trackStyle={styles.progressBarTrack}
+              fillStyle={styles.progressBarFill}
+            />
+          </FadeInView>
         )}
 
         {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+        <PressableScale
+          style={[styles.submitShadow, isSubmitting && styles.submitBtnDisabled]}
           onPress={handleSubmit}
           disabled={isSubmitting}
-          activeOpacity={0.85}
+          haptic="press"
         >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <Text style={styles.submitBtnText}>Preserve Memory ♡</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <LinearGradient
+            colors={gradients(colors).primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.submitBtn}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text style={styles.submitBtnText}>Preserve Memory ♡</Text>
+            )}
+          </LinearGradient>
+        </PressableScale>
+      </FadeInView>
+
+      <MusicSearchModal
+        visible={musicModalVisible}
+        onClose={() => setMusicModalVisible(false)}
+        onSelect={(song) => {
+          stopAudioPreview();
+          setSelectedSong(song);
+        }}
+      />
     </ScrollView>
+
+      {/* Saved! celebration */}
+      {successMsg ? (
+        <View pointerEvents="none" style={styles.celebrateOverlay}>
+          <FadeInView from="scale" style={styles.celebrateCard}>
+            <PulseView style={styles.celebrateHeart} scale={1.15} period={1000}>
+              <CheckCircle2 size={38} color="#ffffff" strokeWidth={2.4} />
+            </PulseView>
+            <Text style={styles.celebrateTitle}>Memory preserved</Text>
+            <Text style={styles.celebrateSub}>Added to your journal ♡</Text>
+          </FadeInView>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -894,32 +717,29 @@ const getStyles = (colors) =>
     },
     card: {
       backgroundColor: colors.surface,
-      borderRadius: 20,
-      borderWidth: 2,
+      borderRadius: 28,
+      borderWidth: 1.5,
       borderColor: colors.cardBorder,
-      padding: 16,
-      elevation: 4,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
+      padding: 18,
+      ...shadow(2),
     },
     header: {
       alignItems: 'center',
       marginBottom: 16,
     },
     sparkleBadge: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 54,
+      height: 54,
+      borderRadius: 27,
       backgroundColor: colors.primaryLight,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 8,
     },
     title: {
-      fontSize: 20,
-      fontWeight: '800',
+      fontSize: 26,
+      fontFamily: fonts.displayHeavy,
+      fontWeight: 'normal',
       color: colors.textDark,
       marginBottom: 2,
     },
@@ -1023,78 +843,42 @@ const getStyles = (colors) =>
       fontWeight: '600',
       color: colors.textDark,
     },
-    chipsScroll: {
-      gap: 8,
-      paddingVertical: 4,
-    },
-    chip: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 18,
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
-    },
-    chipActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    chipText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: colors.textSubtle,
-    },
-    chipTextActive: {
-      color: '#ffffff',
-    },
-    moodRow: {
+
+    // Deezer Music In-Form Trigger
+    openMusicModalBtn: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 6,
-    },
-    moodBtn: {
-      flex: 1,
       alignItems: 'center',
-      paddingVertical: 8,
-      borderRadius: 12,
       backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
-    },
-    moodBtnActive: {
-      backgroundColor: colors.primaryLight,
-      borderColor: colors.primary,
+      borderRadius: 14,
       borderWidth: 1.5,
-    },
-    moodEmoji: {
-      fontSize: 18,
-      marginBottom: 2,
-    },
-    moodLabel: {
-      fontSize: 10,
-      fontWeight: '600',
-      color: colors.textSubtle,
-    },
-    moodLabelActive: {
-      color: colors.primary,
-      fontWeight: '700',
-    },
-    ratingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      borderColor: colors.primary,
+      borderStyle: 'dashed',
+      padding: 12,
       gap: 10,
     },
-    ratingHeartBtn: {
-      padding: 2,
+    openMusicIconCircle: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.primaryLight,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    ratingScore: {
-      fontSize: 12,
-      fontWeight: '700',
+    openMusicTextWrap: {
+      flex: 1,
+    },
+    openMusicTitle: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.textDark,
+    },
+    openMusicSub: {
+      fontSize: 11,
       color: colors.textSubtle,
-      marginLeft: 6,
+      marginTop: 1,
     },
 
-    // Deezer Music Styles
+    // Selected Song Card
     selectedSongCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1156,153 +940,24 @@ const getStyles = (colors) =>
       justifyContent: 'center',
       marginRight: 8,
     },
-    removeSongBtn: {
-      padding: 6,
-    },
-    musicSearchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
-      borderRadius: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    musicInput: {
-      flex: 1,
-      fontSize: 13,
-      color: colors.textDark,
-      paddingVertical: 8,
-    },
-    searchActionBtn: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 8,
-      marginLeft: 6,
-    },
-    searchActionBtnText: {
-      color: '#ffffff',
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    popularSongsWrap: {
-      marginTop: 8,
-    },
-    popularLabel: {
-      fontSize: 11,
-      color: colors.textSubtle,
-      fontWeight: '600',
-      marginBottom: 6,
-    },
-    popularPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 12,
-      backgroundColor: colors.surfaceSubtle,
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
-    },
-    popularPillText: {
-      fontSize: 11,
-      color: colors.textDark,
-      fontWeight: '500',
-    },
-    musicLoadingWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      paddingVertical: 14,
-    },
-    musicLoadingText: {
-      fontSize: 12,
-      color: colors.textSubtle,
-      fontStyle: 'italic',
-    },
-    musicResultsList: {
-      marginTop: 8,
-      backgroundColor: colors.surfaceSubtle,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.borderSubtle,
-      padding: 6,
-      maxHeight: 220,
-    },
-    noMusicFound: {
-      fontSize: 12,
-      color: colors.textSubtle,
-      padding: 12,
-      textAlign: 'center',
-    },
-    trackResultItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 6,
-      paddingHorizontal: 6,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.borderSubtle,
-    },
-    trackThumb: {
-      width: 36,
-      height: 36,
-      borderRadius: 6,
-      marginRight: 8,
-    },
-    trackThumbPlaceholder: {
-      width: 36,
-      height: 36,
-      borderRadius: 6,
-      backgroundColor: colors.primaryLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 8,
-    },
-    trackDetails: {
-      flex: 1,
-    },
-    trackTitle: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.textDark,
-    },
-    trackArtist: {
-      fontSize: 10,
-      color: colors.textSubtle,
-    },
-    trackPreviewBtn: {
+    changeSongBtn: {
       width: 28,
       height: 28,
       borderRadius: 14,
       backgroundColor: colors.surface,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: colors.borderSubtle,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 6,
     },
-    trackPreviewBtnActive: {
-      backgroundColor: colors.primary,
-    },
-    trackSelectBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      backgroundColor: colors.primary,
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      borderRadius: 8,
-    },
-    trackSelectBtnText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: '#ffffff',
+    removeSongBtn: {
+      padding: 6,
     },
 
+    // POP-UP WINDOW (MODAL) STYLES - CENTERED IN THE MIDDLE
+
+    // Photos
     imageActionButtons: {
       flexDirection: 'row',
       gap: 10,
@@ -1403,17 +1058,65 @@ const getStyles = (colors) =>
       backgroundColor: colors.primary,
       borderRadius: 4,
     },
+    preparingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 10,
+    },
+    preparingText: {
+      fontSize: 12,
+      color: colors.textSubtle,
+      fontWeight: '600',
+    },
+    submitShadow: {
+      borderRadius: 18,
+      marginTop: 6,
+      ...shadow(2, colors.primary),
+    },
     submitBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 14,
-      paddingVertical: 14,
+      borderRadius: 18,
+      paddingVertical: 17,
       alignItems: 'center',
       justifyContent: 'center',
-      elevation: 3,
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
+    },
+    celebrateOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(20, 14, 10, 0.35)',
+    },
+    celebrateCard: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: 28,
+      borderWidth: 1.5,
+      borderColor: colors.cardBorder,
+      paddingVertical: 28,
+      paddingHorizontal: 36,
+      ...shadow(3),
+    },
+    celebrateHeart: {
+      width: 76,
+      height: 76,
+      borderRadius: 38,
+      backgroundColor: colors.success,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 14,
+    },
+    celebrateTitle: {
+      fontSize: 24,
+      fontFamily: fonts.display,
+      color: colors.textDark,
+    },
+    celebrateSub: {
+      fontSize: 13,
+      color: colors.textSubtle,
       marginTop: 4,
     },
     submitBtnDisabled: {

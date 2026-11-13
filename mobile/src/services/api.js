@@ -1,6 +1,19 @@
 // Default to your deployed production backend, or local IP if developing locally
 export const API_BASE_URL = 'https://date-logger.singlehq.me';
 
+let onUnauthorizedCallback = null;
+
+export function setOnUnauthorized(callback) {
+  onUnauthorizedCallback = callback;
+}
+
+function friendlyStatusMessage(status) {
+  if (status === 413) return 'Upload is too large. Try fewer or smaller photos.';
+  if (status === 429) return 'Too many attempts. Please wait a few minutes and try again.';
+  if (status === 502 || status === 503 || status === 504) return 'Server is unavailable right now. Please try again shortly.';
+  return `Request failed with status ${status}`;
+}
+
 /**
  * Upload multipart FormData using React Native's native XMLHttpRequest
  * with progress tracking to avoid Expo WinterCG fetch limitations.
@@ -25,17 +38,23 @@ function uploadFormData(url, formData, token, onProgress = null, method = 'POST'
     }
 
     xhr.onload = () => {
+      // Non-JSON bodies (e.g. an nginx HTML error page) are not shown to the user.
       let data = {};
       try {
         data = JSON.parse(xhr.responseText);
       } catch (e) {
-        data = { message: xhr.responseText };
+        data = {};
       }
 
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(data);
       } else {
-        reject(new Error(data.message || `Request failed with status ${xhr.status}`));
+        if (xhr.status === 401 && token && onUnauthorizedCallback) {
+          try {
+            onUnauthorizedCallback();
+          } catch (e) {}
+        }
+        reject(new Error(data.message || friendlyStatusMessage(xhr.status)));
       }
     };
 
@@ -78,18 +97,24 @@ export async function apiRequest(endpoint, { method = 'GET', body, token, isForm
     config.body = JSON.stringify(body);
   }
 
-  try {
-    const response = await fetch(url, config);
-    const data = await response.json().catch(() => ({}));
+  const response = await fetch(url, config);
+  const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      throw new Error(data.message || `Request failed with status ${response.status}`);
-    }
-
-    return data;
-  } catch (error) {
-    throw error;
+  // Only an authenticated request failing means the session is over;
+  // a 401 from the login form is just a wrong password.
+  if (response.status === 401 && token && onUnauthorizedCallback) {
+    try {
+      onUnauthorizedCallback();
+    } catch (e) {}
   }
+
+  if (!response.ok) {
+    const err = new Error(data.message || friendlyStatusMessage(response.status));
+    err.status = response.status;
+    throw err;
+  }
+
+  return data;
 }
 
 export const authAPI = {
@@ -105,9 +130,33 @@ export const authAPI = {
       body: { email, password },
     }),
 
+  me: (token) => apiRequest('/api/auth/me', { token }),
+
+  deleteAccount: (password, token) =>
+    apiRequest('/api/auth/delete-account', { method: 'POST', body: { password }, token }),
+
   logout: () => apiRequest('/api/auth/logout', { method: 'POST' }),
   checkHealth: () => apiRequest('/intro'),
 };
+
+/** Partner linking: linked accounts share one journal and bucket list. */
+export const coupleAPI = {
+  get: (token) => apiRequest('/api/couple', { token }),
+  createInvite: (token) => apiRequest('/api/couple/invite', { method: 'POST', token }),
+  join: (code, token) => apiRequest('/api/couple/join', { method: 'POST', body: { code }, token }),
+  unlink: (token) => apiRequest('/api/couple', { method: 'DELETE', token }),
+};
+
+/** Bucket-list ideas, shared with a linked partner. */
+export const ideasAPI = {
+  list: (token) => apiRequest('/api/ideas', { token }),
+  create: (title, token) => apiRequest('/api/ideas', { method: 'POST', body: { title }, token }),
+  importMany: (ideas, token) => apiRequest('/api/ideas', { method: 'POST', body: { ideas }, token }),
+  update: (id, changes, token) => apiRequest(`/api/ideas/${id}`, { method: 'PATCH', body: changes, token }),
+  remove: (id, token) => apiRequest(`/api/ideas/${id}`, { method: 'DELETE', token }),
+};
+
+export const PRIVACY_POLICY_URL = `${API_BASE_URL}/privacy`;
 
 export const postAPI = {
   getPosts: (token) => apiRequest('/api/post/posts', { token }),

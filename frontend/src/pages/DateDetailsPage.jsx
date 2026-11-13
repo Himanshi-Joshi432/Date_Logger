@@ -12,15 +12,13 @@ import {
   ChevronRight,
   Disc,
   AlertCircle,
-  Clock,
   Sparkles,
-  Share2,
 } from "lucide-react";
 
 export function DateDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const [post, setPost] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,8 +29,6 @@ export function DateDetailsPage() {
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
-    setErrorMsg("");
 
     postAPI
       .getPostById(id, token)

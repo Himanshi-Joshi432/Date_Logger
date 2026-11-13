@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
@@ -7,13 +9,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   FlatList,
-  Image,
   Alert,
   Share,
-  Vibration,
+  LayoutAnimation,
   useWindowDimensions,
 } from 'react-native';
-import { createAudioPlayer } from 'expo-audio';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Calendar,
@@ -36,7 +36,12 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { haptics } from '../utils/haptics';
+import { FadeInView, PressableScale, PulseView, staggerDelay } from '../components/motion';
+import { fonts, shadow } from '../theme/tokens';
 import { postAPI } from '../services/api';
+import { useAudioPreview } from '../hooks/useAudioPreview';
+import { resolvePreviewUrl } from '../services/musicService';
 
 const CACHE_KEY_POSTS = 'date_logger_cached_posts';
 
@@ -53,12 +58,12 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
   const [deletingId, setDeletingId] = useState(null);
 
   // Audio playback state
-  const [sound, setSound] = useState(null);
-  const [playingPostId, setPlayingPostId] = useState(null);
-  const timerRef = React.useRef(null);
+  const audioPreview = useAudioPreview();
+  const playingPostId = audioPreview.playingKey;
 
   // Load cached posts first for immediate response
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     async function loadCache() {
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEY_POSTS);
@@ -70,15 +75,8 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
       fetchPosts();
     }
     loadCache();
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (sound) {
-        sound.pause();
-        sound.release();
-      }
-    };
-  }, [token]);
+    }, [token])
+  );
 
   const fetchPosts = async () => {
     try {
@@ -108,11 +106,14 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
             setDeletingId(id);
             try {
               await postAPI.deletePost(id, token);
-              const updated = posts.filter((p) => p._id !== id);
-              setPosts(updated);
-              await AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(updated));
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setPosts((prev) => {
+                const updated = prev.filter((p) => p._id !== id);
+                AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(updated)).catch(() => {});
+                return updated;
+              });
               try {
-                Vibration.vibrate(25);
+                haptics.success();
               } catch (e) {}
             } catch (err) {
               Alert.alert('Error', err.message || 'Failed to delete date log');
@@ -128,7 +129,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
   const handleShare = async (item) => {
     try {
       try {
-        Vibration.vibrate(15);
+        haptics.select();
       } catch (e) {}
       const dateStr = item.date
         ? new Date(item.date).toLocaleDateString()
@@ -141,46 +142,14 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
     } catch (e) {}
   };
 
-  const handleToggleAudio = async (postId, audioUrl) => {
-    if (!audioUrl) return;
-
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const handleToggleAudio = async (post) => {
+    if (audioPreview.playingKey === post._id) {
+      audioPreview.stop();
+      return;
     }
-
-    try {
-      if (playingPostId === postId && sound) {
-        sound.pause();
-        setPlayingPostId(null);
-        return;
-      }
-
-      if (sound) {
-        sound.pause();
-        sound.release();
-      }
-
-      const player = createAudioPlayer(audioUrl);
-      player.play();
-      setSound(player);
-      setPlayingPostId(postId);
-
-      // Play 15 seconds maximum
-      timerRef.current = setTimeout(() => {
-        if (player) player.pause();
-        setPlayingPostId(null);
-      }, 15000);
-
-      player.addListener('playbackStatusUpdate', (status) => {
-        if (status.didJustFinish) {
-          if (timerRef.current) clearTimeout(timerRef.current);
-          setPlayingPostId(null);
-        }
-      });
-    } catch (err) {
-      console.warn('Audio playback error', err);
-    }
+    // Saved preview links can expire; fetch a fresh one when needed.
+    const url = await resolvePreviewUrl(post.music);
+    if (url) audioPreview.play(url, post._id);
   };
 
   // Derive unique years from posts for filter pills
@@ -227,21 +196,30 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
       : 'No date';
 
     return (
-      <View
+      <FadeInView
+        delay={staggerDelay(index)}
+        from={isStaggerRight ? 'right' : 'left'}
+        distance={22}
         style={[
           styles.postCard,
           isStaggerRight ? styles.staggerRight : styles.staggerLeft,
         ]}
       >
-        <TouchableOpacity
+        <PressableScale
           style={styles.cardHeaderRow}
           onPress={() => onViewDetails && onViewDetails(item)}
-          activeOpacity={0.8}
+          scaleTo={0.98}
         >
           {/* Thumbnail */}
           <View style={styles.thumbnailWrap}>
             {thumbnail ? (
-              <Image source={{ uri: thumbnail }} style={styles.thumbnail} />
+              <Image
+                source={{ uri: thumbnail }}
+                style={styles.thumbnail}
+                contentFit="cover"
+                transition={200}
+                recyclingKey={item._id}
+              />
             ) : (
               <View style={styles.noThumbnail}>
                 <Text style={styles.noThumbnailText}>No photo</Text>
@@ -282,7 +260,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               {item.music?.audioUrl ? (
                 <TouchableOpacity
                   style={[styles.audioTag, isAudioPlaying && styles.audioTagPlaying]}
-                  onPress={() => handleToggleAudio(item._id, item.music.audioUrl)}
+                  onPress={() => handleToggleAudio(item)}
                 >
                   {isAudioPlaying ? (
                     <Pause size={10} color="#ffffff" />
@@ -301,18 +279,18 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               ) : null}
             </View>
           </View>
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* Card Footer */}
         <View style={styles.cardFooterRow}>
-          <TouchableOpacity
+          <PressableScale
             style={styles.viewDetailsBtn}
             onPress={() => onViewDetails && onViewDetails(item)}
-            activeOpacity={0.8}
+            scaleTo={0.94}
           >
             <Text style={styles.viewDetailsBtnText}>View Details</Text>
             <ArrowRight size={13} color="#ffffff" />
-          </TouchableOpacity>
+          </PressableScale>
 
           <View style={styles.footerActions}>
             <TouchableOpacity
@@ -335,12 +313,12 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </FadeInView>
     );
   };
 
   // Render Polaroid Grid item
-  const renderGridItem = ({ item }) => {
+  const renderGridItem = ({ item, index }) => {
     const thumbnail =
       (item.images && item.images.length > 0 ? item.images[0] : item.image) || null;
     const formattedDate = item.date
@@ -351,14 +329,21 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
       : '';
 
     return (
-      <TouchableOpacity
-        style={styles.gridCard}
+      <FadeInView delay={staggerDelay(index, 0, 45)} from="scale" style={styles.gridCard}>
+      <PressableScale
+        style={{ transform: [{ rotate: index % 2 === 0 ? '-1.2deg' : '1.2deg' }] }}
         onPress={() => onViewDetails && onViewDetails(item)}
-        activeOpacity={0.85}
+        scaleTo={0.95}
       >
         <View style={styles.polaroidFrame}>
           {thumbnail ? (
-            <Image source={{ uri: thumbnail }} style={styles.gridImage} />
+            <Image
+              source={{ uri: thumbnail }}
+              style={styles.gridImage}
+              contentFit="cover"
+              transition={200}
+              recyclingKey={item._id}
+            />
           ) : (
             <View style={styles.noGridImage}>
               <Heart size={20} color={colors.borderActive} />
@@ -371,7 +356,8 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
             <Text style={styles.gridDate}>{formattedDate}</Text>
           </View>
         </View>
-      </TouchableOpacity>
+      </PressableScale>
+      </FadeInView>
     );
   };
 
@@ -395,17 +381,19 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
             style={styles.modeToggleBtn}
             onPress={() => {
               try {
-                Vibration.vibrate(15);
+                haptics.select();
               } catch (e) {}
               setViewMode(viewMode === 'list' ? 'grid' : 'list');
             }}
             activeOpacity={0.7}
           >
-            {viewMode === 'list' ? (
-              <LayoutGrid size={16} color={colors.textDark} />
-            ) : (
-              <List size={16} color={colors.textDark} />
-            )}
+            <FadeInView key={viewMode} from="scale">
+              {viewMode === 'list' ? (
+                <LayoutGrid size={16} color={colors.textDark} />
+              ) : (
+                <List size={16} color={colors.textDark} />
+              )}
+            </FadeInView>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -483,10 +471,10 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
           <Text style={styles.loadingText}>Unrolling date memories...</Text>
         </View>
       ) : filteredPosts.length === 0 ? (
-        <View style={styles.centerBox}>
-          <View style={styles.emptyCircle}>
+        <FadeInView key={searchTerm ? 'search' : 'empty'} style={styles.centerBox}>
+          <PulseView style={styles.emptyCircle}>
             <HistoryIcon size={32} color={colors.primary} />
-          </View>
+          </PulseView>
           <Text style={styles.emptyTitle}>
             {searchTerm ? 'No matching dates' : 'No date logs yet'}
           </Text>
@@ -495,15 +483,11 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               ? `No memories found matching "${searchTerm}".`
               : 'Start documenting your favorite moments together in this journal!'}
           </Text>
-          <TouchableOpacity
-            style={styles.emptyBtn}
-            onPress={onNavigateLog}
-            activeOpacity={0.85}
-          >
+          <PressableScale style={styles.emptyBtn} onPress={onNavigateLog} haptic="press">
             <Plus size={18} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={styles.emptyBtnText}>Log Your First Date</Text>
-          </TouchableOpacity>
-        </View>
+          </PressableScale>
+        </FadeInView>
       ) : (
         <FlatList
           key={viewMode}
@@ -561,8 +545,9 @@ const getStyles = (colors, width) =>
       justifyContent: 'center',
     },
     navTitle: {
-      fontSize: 18,
-      fontWeight: '800',
+      fontSize: 22,
+      fontFamily: fonts.display,
+      fontWeight: 'normal',
       color: colors.textDark,
     },
     searchBar: {
@@ -611,16 +596,12 @@ const getStyles = (colors, width) =>
     },
     postCard: {
       backgroundColor: colors.surface,
-      borderRadius: 16,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.borderActive,
       padding: 12,
-      marginBottom: 12,
-      elevation: 3,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 4,
+      marginBottom: 14,
+      ...shadow(2),
     },
     staggerLeft: {
       transform: [{ rotate: '-0.3deg' }],
@@ -675,8 +656,9 @@ const getStyles = (colors, width) =>
       justifyContent: 'center',
     },
     venueTitle: {
-      fontSize: 16,
-      fontWeight: '800',
+      fontSize: 17,
+      fontFamily: fonts.display,
+      fontWeight: 'normal',
       color: colors.textDark,
       marginBottom: 3,
     },
@@ -845,8 +827,9 @@ const getStyles = (colors, width) =>
       marginBottom: 12,
     },
     emptyTitle: {
-      fontSize: 17,
-      fontWeight: '800',
+      fontSize: 21,
+      fontFamily: fonts.display,
+      fontWeight: 'normal',
       color: colors.textDark,
       marginBottom: 4,
     },

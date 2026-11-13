@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { postAPI } from "../services/api";
+import { toLocalDateString } from "../utils/date";
 import {
   MapPin,
   Calendar,
@@ -15,7 +16,6 @@ import {
   Music,
   Disc,
   Plus,
-  Image as ImageIcon,
 } from "lucide-react";
 
 export function LogDatePage() {
@@ -23,9 +23,7 @@ export function LogDatePage() {
   const navigate = useNavigate();
 
   const [venue, setVenue] = useState("");
-  const [date, setDate] = useState(
-    () => new Date().toISOString().split("T")[0]
-  );
+  const [date, setDate] = useState(() => toLocalDateString());
   const [description, setDescription] = useState("");
   const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
@@ -129,10 +127,6 @@ export function LogDatePage() {
     imageFiles.forEach((file) => {
       formData.append("images", file);
     });
-    // Also append the primary image for backwards compatibility
-    if (imageFiles[0]) {
-      formData.append("image", imageFiles[0]);
-    }
 
     // Audio / Soundtrack is optional
     if (audioFile) {
@@ -144,7 +138,7 @@ export function LogDatePage() {
       setSuccessMsg("Date memory saved successfully!");
       setVenue("");
       setDescription("");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(toLocalDateString());
       handleClearAllImages();
       handleRemoveAudio();
       setTimeout(() => {

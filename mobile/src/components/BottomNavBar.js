@@ -1,74 +1,152 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Home, BookHeart, Plus, Sparkles } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { haptics } from '../utils/haptics';
+import { gradients, shadow } from '../theme/tokens';
+import { PressableScale } from './motion';
 
-export function BottomNavBar({ currentScreen, onSelectTab }) {
+const TABS = [
+  { key: 'dashboard', label: 'Journal', icon: Home },
+  { key: 'history', label: 'Memories', icon: BookHeart },
+  { key: 'log', label: 'Log Date', icon: Plus, isAction: true },
+  { key: 'ideas', label: 'Bucket List', icon: Sparkles },
+];
+
+function TabItem({ tab, isActive, onPress, colors, styles }) {
+  const active = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(active, {
+      toValue: isActive ? 1 : 0,
+      useNativeDriver: true,
+      damping: 12,
+      stiffness: 260,
+      mass: 0.7,
+    }).start();
+  }, [isActive]);
+
+  const Icon = tab.icon;
+  const iconScale = active.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const iconLift = active.interpolate({ inputRange: [0, 1], outputRange: [0, -2] });
+  const pillScale = active.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
+  return (
+    <Pressable
+      style={styles.tabBtn}
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: isActive }}
+      accessibilityLabel={tab.label}
+    >
+      <View style={styles.iconSlot}>
+        <Animated.View
+          style={[styles.activePill, { opacity: active, transform: [{ scaleX: pillScale }] }]}
+        />
+        <Animated.View style={{ transform: [{ translateY: iconLift }, { scale: iconScale }] }}>
+          <Icon
+            size={20}
+            color={isActive ? colors.primary : colors.textSubtle}
+            strokeWidth={isActive ? 2.4 : 1.8}
+          />
+        </Animated.View>
+      </View>
+      <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
+      <Animated.View style={[styles.activeDot, { opacity: active, transform: [{ scale: active }] }]} />
+    </Pressable>
+  );
+}
+
+function ActionTab({ tab, isActive, onPress, colors, styles }) {
+  const spin = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(spin, {
+      toValue: isActive ? 1 : 0,
+      useNativeDriver: true,
+      damping: 12,
+      stiffness: 200,
+    }).start();
+  }, [isActive]);
+
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '135deg'] });
+  const Icon = tab.icon;
+
+  return (
+    <View style={styles.actionBtnWrapper}>
+      <PressableScale
+        onPress={onPress}
+        haptic={null}
+        scaleTo={0.88}
+        style={styles.actionBtnShadow}
+        accessibilityRole="button"
+        accessibilityLabel={tab.label}
+      >
+        <LinearGradient
+          colors={gradients(colors).primary}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.actionBtn}
+        >
+          <Animated.View style={{ transform: [{ rotate }] }}>
+            <Icon size={26} color="#ffffff" strokeWidth={2.6} />
+          </Animated.View>
+        </LinearGradient>
+      </PressableScale>
+      <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
+    </View>
+  );
+}
+
+export function BottomNavBar({ currentScreen, onSelectTab, visible = true }) {
   const { colors } = useTheme();
+  const styles = getStyles(colors);
+
+  const shown = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.spring(shown, {
+      toValue: visible ? 1 : 0,
+      useNativeDriver: true,
+      damping: 18,
+      stiffness: 200,
+    }).start();
+  }, [visible]);
 
   const handlePress = (tab) => {
-    try {
-      Vibration.vibrate(15);
-    } catch (e) {}
+    if (tab === 'log') haptics.press();
+    else haptics.select();
     onSelectTab(tab);
   };
 
-  const tabs = [
-    { key: 'dashboard', label: 'Journal', icon: Home },
-    { key: 'history', label: 'Memories', icon: BookHeart },
-    { key: 'log', label: 'Log Date', icon: Plus, isAction: true },
-    { key: 'ideas', label: 'Bucket List', icon: Sparkles },
-  ];
-
-  const styles = getStyles(colors);
-
   return (
-    <View style={styles.container}>
+    <Animated.View
+      pointerEvents={visible ? 'box-none' : 'none'}
+      style={[
+        styles.container,
+        {
+          opacity: shown,
+          transform: [{ translateY: shown.interpolate({ inputRange: [0, 1], outputRange: [110, 0] }) }],
+        },
+      ]}
+    >
       <View style={styles.navBar}>
-        {tabs.map((tab) => {
+        {TABS.map((tab) => {
           const isActive = currentScreen === tab.key;
-          const Icon = tab.icon;
-
-          if (tab.isAction) {
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={styles.actionBtnWrapper}
-                onPress={() => handlePress(tab.key)}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.actionBtn, isActive && styles.actionBtnActive]}>
-                  <Icon size={24} color="#ffffff" strokeWidth={2.6} />
-                </View>
-                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          }
-
+          const Comp = tab.isAction ? ActionTab : TabItem;
           return (
-            <TouchableOpacity
+            <Comp
               key={tab.key}
-              style={styles.tabBtn}
+              tab={tab}
+              isActive={isActive}
               onPress={() => handlePress(tab.key)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
-                <Icon
-                  size={20}
-                  color={isActive ? colors.primary : colors.textSubtle}
-                  strokeWidth={isActive ? 2.4 : 1.8}
-                />
-              </View>
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
+              colors={colors}
+              styles={styles}
+            />
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -79,9 +157,8 @@ const getStyles = (colors) =>
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: colors.bg,
       paddingHorizontal: 14,
-      paddingBottom: 8,
+      paddingBottom: 10,
       paddingTop: 6,
     },
     navBar: {
@@ -89,64 +166,69 @@ const getStyles = (colors) =>
       alignItems: 'center',
       justifyContent: 'space-around',
       backgroundColor: colors.surface,
-      borderRadius: 24,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
-      paddingVertical: 6,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      paddingVertical: 8,
       paddingHorizontal: 8,
-      elevation: 6,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 8,
+      ...shadow(3),
     },
     tabBtn: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 4,
-      paddingHorizontal: 12,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
       minWidth: 64,
     },
-    iconWrap: {
-      padding: 4,
-      borderRadius: 12,
+    iconSlot: {
+      width: 48,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    iconWrapActive: {
+    activePill: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      borderRadius: 15,
       backgroundColor: colors.primaryLight,
     },
     tabLabel: {
       fontSize: 10,
       fontWeight: '600',
       color: colors.textMuted,
-      marginTop: 2,
+      marginTop: 3,
+      letterSpacing: 0.2,
     },
     tabLabelActive: {
       color: colors.primary,
-      fontWeight: '700',
+      fontWeight: '800',
+    },
+    activeDot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.primary,
+      marginTop: 3,
     },
     actionBtnWrapper: {
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: -18,
+      marginTop: -26,
+    },
+    actionBtnShadow: {
+      borderRadius: 30,
+      ...shadow(3, colors.primary),
     },
     actionBtn: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.primary,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
       alignItems: 'center',
       justifyContent: 'center',
-      elevation: 4,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      borderWidth: 2,
+      borderWidth: 3,
       borderColor: colors.surface,
     },
-    actionBtnActive: {
-      transform: [{ scale: 1.05 }],
-      backgroundColor: colors.primaryHover,
-    },
   });
-

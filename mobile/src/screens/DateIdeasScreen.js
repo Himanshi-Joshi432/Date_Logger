@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
+  RefreshControl,
   Alert,
-  Vibration,
+  LayoutAnimation,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -21,75 +22,129 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { ideasAPI } from '../services/api';
+import { haptics } from '../utils/haptics';
+import { FadeInView, PressableScale, PulseView, staggerDelay } from '../components/motion';
+import { fonts, shadow } from '../theme/tokens';
+
+const animateNextLayout = () =>
+  LayoutAnimation.configureNext(LayoutAnimation.create(260, 'easeInEaseOut', 'opacity'));
 
 const IDEAS_STORAGE_KEY = 'date_logger_bucket_list';
+const MIGRATED_KEY_PREFIX = 'date_logger_ideas_migrated_';
 
-const INITIAL_IDEAS = [
-  { id: '1', title: 'Sunset picnic at the botanical garden', completed: false, category: 'Outdoor' },
-  { id: '2', title: 'Pottery class & cozy coffee date', completed: false, category: 'Creative' },
-  { id: '3', title: 'Late night drive with warm hot chocolate', completed: true, category: 'Cozy' },
-];
+// Sample ideas that older versions of the app seeded on first launch.
+const LEGACY_SAMPLE_TITLES = new Set([
+  'Sunset picnic at the botanical garden',
+  'Pottery class & cozy coffee date',
+  'Late night drive with warm hot chocolate',
+]);
+
+const isServerId = (id) => /^[a-f0-9]{24}$/i.test(String(id || ''));
+const fromServer = (idea) => ({
+  id: idea._id,
+  title: idea.title,
+  completed: !!idea.completed,
+  createdAt: idea.createdAt,
+});
 
 export function DateIdeasScreen({ onLogIdeaAsDate }) {
   const { colors } = useTheme();
+  const { token, user } = useAuth();
   const [ideas, setIdeas] = useState([]);
   const [newIdeaText, setNewIdeaText] = useState('');
   const [filter, setFilter] = useState('all'); // 'all' | 'pending' | 'completed'
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     loadIdeas();
-  }, []);
+  }, [token]);
+
+  /** Updates the list on screen and the offline copy. */
+  const applyIdeas = (next, { animate = true } = {}) => {
+    if (animate) animateNextLayout();
+    setIdeas(next);
+    AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+  };
 
   const loadIdeas = async () => {
+    // 1. Show the offline copy straight away.
+    let local = [];
     try {
       const stored = await AsyncStorage.getItem(IDEAS_STORAGE_KEY);
-      if (stored) {
-        setIdeas(JSON.parse(stored));
-      } else {
-        setIdeas(INITIAL_IDEAS);
-        await AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(INITIAL_IDEAS));
+      if (stored) local = JSON.parse(stored) || [];
+      if (local.length > 0) setIdeas(local);
+    } catch (e) {}
+
+    try {
+      // 2. One-time move of ideas that only ever lived on this phone up to the account.
+      const migratedKey = MIGRATED_KEY_PREFIX + (user?.id || 'me');
+      const alreadyMigrated = (await AsyncStorage.getItem(migratedKey)) === 'true';
+      if (!alreadyMigrated) {
+        const toImport = local
+          .filter((i) => i?.title && !isServerId(i.id) && !LEGACY_SAMPLE_TITLES.has(i.title))
+          .map((i) => ({ title: i.title, completed: !!i.completed }));
+        if (toImport.length > 0) {
+          await ideasAPI.importMany(toImport.reverse(), token);
+        }
+        await AsyncStorage.setItem(migratedKey, 'true');
       }
-    } catch (e) {
-      setIdeas(INITIAL_IDEAS);
+
+      // 3. The server list (yours plus your partner's) is the source of truth.
+      const data = await ideasAPI.list(token);
+      applyIdeas((data.ideas || []).map(fromServer), { animate: false });
+    } catch (err) {
+      // Offline: keep showing the local copy.
     }
   };
 
-  const saveIdeas = async (newIdeas) => {
-    setIdeas(newIdeas);
-    try {
-      await AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(newIdeas));
-    } catch (e) {
-      // ignore
-    }
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadIdeas();
+    setIsRefreshing(false);
   };
 
-  const handleAddIdea = () => {
-    if (!newIdeaText.trim()) return;
-    try {
-      Vibration.vibrate(30);
-    } catch (e) {}
+  const handleAddIdea = async () => {
+    const title = newIdeaText.trim();
+    if (!title) return;
+    haptics.success();
 
-    const newItem = {
-      id: Date.now().toString(),
-      title: newIdeaText.trim(),
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updated = [newItem, ...ideas];
-    saveIdeas(updated);
+    const tempId = `temp-${Date.now()}`;
+    const optimistic = { id: tempId, title, completed: false, createdAt: new Date().toISOString() };
+    const before = ideas;
+    applyIdeas([optimistic, ...ideas]);
     setNewIdeaText('');
+
+    try {
+      const data = await ideasAPI.create(title, token);
+      const saved = fromServer(data.ideas[0]);
+      setIdeas((current) => {
+        const next = current.map((i) => (i.id === tempId ? saved : i));
+        AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    } catch (err) {
+      haptics.error();
+      applyIdeas(before);
+      setNewIdeaText(title);
+      Alert.alert('Could not save idea', err.message || 'Please check your connection and try again.');
+    }
   };
 
-  const handleToggleComplete = (id) => {
-    try {
-      Vibration.vibrate(20);
-    } catch (e) {}
+  const handleToggleComplete = async (id) => {
+    const target = ideas.find((i) => i.id === id);
+    if (!target || !isServerId(id)) return; // still saving
+    haptics.select();
 
-    const updated = ideas.map((idea) =>
-      idea.id === id ? { ...idea, completed: !idea.completed } : idea
-    );
-    saveIdeas(updated);
+    const before = ideas;
+    applyIdeas(ideas.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i)));
+    try {
+      await ideasAPI.update(id, { completed: !target.completed }, token);
+    } catch (err) {
+      haptics.error();
+      applyIdeas(before);
+    }
   };
 
   const handleDelete = (id, title) => {
@@ -98,9 +153,17 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: () => {
-          const updated = ideas.filter((idea) => idea.id !== id);
-          saveIdeas(updated);
+        onPress: async () => {
+          haptics.warning();
+          const before = ideas;
+          applyIdeas(ideas.filter((idea) => idea.id !== id));
+          if (!isServerId(id)) return;
+          try {
+            await ideasAPI.remove(id, token);
+          } catch (err) {
+            applyIdeas(before);
+            Alert.alert('Could not remove idea', err.message || 'Please try again.');
+          }
         },
       },
     ]);
@@ -117,16 +180,20 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
+      <FadeInView from="top" distance={10} style={styles.header}>
         <View style={styles.titleRow}>
           <Sparkles size={20} color={colors.primary} />
           <Text style={styles.title}>Date Bucket List</Text>
         </View>
-        <Text style={styles.subtitle}>Dream up future dates together & check them off ♡</Text>
-      </View>
+        <Text style={styles.subtitle}>
+          {user?.partner?.email
+            ? `Shared with ${user.partner.email.split('@')[0]} — dream up dates & check them off ♡`
+            : 'Dream up future dates together & check them off ♡'}
+        </Text>
+      </FadeInView>
 
       {/* Add New Idea Input */}
-      <View style={styles.addCard}>
+      <FadeInView delay={80} style={styles.addCard}>
         <TextInput
           style={styles.input}
           placeholder="New date idea (e.g. Star gazing picnic)..."
@@ -136,30 +203,36 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
           onSubmitEditing={handleAddIdea}
           returnKeyType="done"
         />
-        <TouchableOpacity
+        <PressableScale
           style={[styles.addBtn, !newIdeaText.trim() && styles.addBtnDisabled]}
           onPress={handleAddIdea}
           disabled={!newIdeaText.trim()}
-          activeOpacity={0.8}
+          haptic={null}
+          scaleTo={0.85}
         >
           <Plus size={18} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
+        </PressableScale>
+      </FadeInView>
 
       {/* Filter Tabs */}
-      <View style={styles.filterRow}>
+      <FadeInView delay={140} style={styles.filterRow}>
         {['all', 'pending', 'completed'].map((tab) => (
-          <TouchableOpacity
+          <PressableScale
             key={tab}
             style={[styles.filterChip, filter === tab && styles.filterChipActive]}
-            onPress={() => setFilter(tab)}
+            onPress={() => {
+              animateNextLayout();
+              setFilter(tab);
+            }}
+            haptic="select"
+            scaleTo={0.92}
           >
             <Text style={[styles.filterChipText, filter === tab && styles.filterChipTextActive]}>
               {tab === 'all' ? `All (${ideas.length})` : tab === 'pending' ? 'To Do' : 'Done ✓'}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         ))}
-      </View>
+      </FadeInView>
 
       {/* Ideas List */}
       <FlatList
@@ -167,26 +240,39 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Lightbulb size={32} color={colors.primary} />
+          <FadeInView style={styles.emptyWrap}>
+            <PulseView>
+              <Lightbulb size={32} color={colors.primary} />
+            </PulseView>
             <Text style={styles.emptyTitle}>No ideas yet</Text>
             <Text style={styles.emptySub}>Add places you want to visit and things you want to try together!</Text>
-          </View>
+          </FadeInView>
         }
-        renderItem={({ item }) => (
-          <View style={[styles.ideaCard, item.completed && styles.ideaCardCompleted]}>
-            <TouchableOpacity
+        renderItem={({ item, index }) => (
+          <FadeInView
+            delay={staggerDelay(index, 180, 50)}
+            style={[styles.ideaCard, item.completed && styles.ideaCardCompleted]}
+          >
+            <PressableScale
               style={styles.checkBtn}
               onPress={() => handleToggleComplete(item.id)}
-              activeOpacity={0.7}
+              haptic={null}
+              scaleTo={0.8}
+              hitSlop={6}
             >
-              {item.completed ? (
-                <CheckCircle2 size={22} color={colors.success} />
-              ) : (
-                <Circle size={22} color={colors.borderActive} />
-              )}
-            </TouchableOpacity>
+              <FadeInView key={item.completed ? 'done' : 'todo'} from="scale">
+                {item.completed ? (
+                  <CheckCircle2 size={24} color={colors.success} />
+                ) : (
+                  <Circle size={24} color={colors.borderActive} />
+                )}
+              </FadeInView>
+            </PressableScale>
 
             <View style={styles.ideaTextWrap}>
               <Text
@@ -202,14 +288,15 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
             {/* Action buttons */}
             <View style={styles.actionsRow}>
               {!item.completed && onLogIdeaAsDate && (
-                <TouchableOpacity
+                <PressableScale
                   style={styles.logIdeaBtn}
                   onPress={() => onLogIdeaAsDate(item.title)}
-                  activeOpacity={0.8}
+                  haptic="press"
+                  scaleTo={0.9}
                 >
                   <Text style={styles.logIdeaBtnText}>Log It</Text>
                   <ArrowRight size={12} color={colors.primary} />
-                </TouchableOpacity>
+                </PressableScale>
               )}
               <TouchableOpacity
                 style={styles.deleteBtn}
@@ -219,7 +306,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
                 <Trash2 size={15} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-          </View>
+          </FadeInView>
         )}
       />
     </View>
@@ -244,8 +331,9 @@ const getStyles = (colors) =>
       marginBottom: 4,
     },
     title: {
-      fontSize: 22,
-      fontWeight: '800',
+      fontSize: 26,
+      fontFamily: fonts.displayHeavy,
+      fontWeight: 'normal',
       color: colors.textDark,
     },
     subtitle: {
@@ -256,17 +344,13 @@ const getStyles = (colors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 14,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.borderActive,
       paddingHorizontal: 12,
       paddingVertical: 4,
       marginBottom: 14,
-      elevation: 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 3,
+      ...shadow(2),
     },
     input: {
       flex: 1,
@@ -276,9 +360,9 @@ const getStyles = (colors) =>
     },
     addBtn: {
       backgroundColor: colors.primary,
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
       marginLeft: 8,
@@ -318,16 +402,13 @@ const getStyles = (colors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1.5,
-      borderColor: colors.cardBorder,
-      padding: 12,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      paddingVertical: 14,
+      paddingHorizontal: 12,
       marginBottom: 10,
-      elevation: 1,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 2,
+      ...shadow(1),
     },
     ideaCardCompleted: {
       opacity: 0.7,

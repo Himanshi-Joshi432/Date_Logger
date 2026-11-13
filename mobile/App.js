@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text, BackHandler } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
+import { StyleSheet, View, Text, BackHandler, Image, Animated, Easing } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Heart } from 'lucide-react-native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  StackActions,
+  createNavigationContainerRef,
+  useFocusEffect,
+} from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useFonts } from 'expo-font';
+// Import individual weights so only these three font files are bundled.
+import { PlayfairDisplay_400Regular_Italic } from '@expo-google-fonts/playfair-display/400Regular_Italic';
+import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display/700Bold';
+import { PlayfairDisplay_800ExtraBold } from '@expo-google-fonts/playfair-display/800ExtraBold';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -13,186 +26,410 @@ import { LogDateScreen } from './src/screens/LogDateScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { DateDetailsScreen } from './src/screens/DateDetailsScreen';
 import { DateIdeasScreen } from './src/screens/DateIdeasScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { BottomNavBar } from './src/components/BottomNavBar';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { PulseView, ScreenTransition } from './src/components/motion';
+import { onReminderOpened } from './src/services/notifications';
+import { fonts } from './src/theme/tokens';
 
-function MainApp() {
-  const { isAuthenticated, isInitializing } = useAuth();
-  const { colors, isDarkMode } = useTheme();
+// Keep the native splash up until our animated one is on screen (avoids a blank flash).
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
-  // Navigation states
-  const [authScreen, setAuthScreen] = useState('login'); // 'login' | 'register'
-  const [currentScreen, setCurrentScreen] = useState('dashboard'); // 'dashboard' | 'log' | 'history' | 'ideas' | 'details'
-  const [selectedPostId, setSelectedPostId] = useState(null);
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [initialVenueForLog, setInitialVenueForLog] = useState('');
+const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
-  // Hardware Back Button Handler for Android
+// Bumped when the shared journal changes shape (partner linked or unlinked) so tabs reload.
+const JournalContext = createContext({ version: 0, bump: () => {} });
+
+// Order of the bottom tabs, used to pick the slide direction between them.
+const TAB_ORDER = { dashboard: 0, history: 1, log: 2, ideas: 3 };
+
+// Deep links: datelogger://memory/<id> and datelogger://settings
+const linking = {
+  prefixes: ['datelogger://'],
+  config: {
+    initialRouteName: 'Main',
+    screens: {
+      Main: '',
+      Details: 'memory/:postId',
+      Settings: 'settings',
+    },
+  },
+};
+
+/** Branded splash that pulses while loading, then fades and lifts away. */
+function AnimatedSplash({ ready, fontsReady, onHidden, colors }) {
+  const out = useRef(new Animated.Value(0)).current;
+  const intro = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    const onBackPress = () => {
-      if (!isAuthenticated) return false;
+    // This view now covers the screen, so the native splash can go.
+    SplashScreen.hide();
+    Animated.timing(intro, {
+      toValue: 1,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
-      if (currentScreen === 'details') {
-        setCurrentScreen('history');
-        return true;
-      }
-      if (currentScreen === 'log' || currentScreen === 'history' || currentScreen === 'ideas') {
-        setCurrentScreen('dashboard');
-        return true;
-      }
-      return false; // Let OS handle (exit app)
-    };
+  useEffect(() => {
+    if (!ready) return;
+    Animated.timing(out, {
+      toValue: 1,
+      duration: 420,
+      delay: 150,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => onHidden && onHidden());
+  }, [ready]);
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => subscription.remove();
-  }, [currentScreen, isAuthenticated]);
-
-  // Initializing splash
-  if (isInitializing) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.bg }]}>
-        <View
+  return (
+    <Animated.View
+      pointerEvents={ready ? 'none' : 'auto'}
+      style={[
+        StyleSheet.absoluteFill,
+        styles.loadingContainer,
+        {
+          backgroundColor: colors.bg,
+          opacity: out.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+        },
+      ]}
+    >
+      <Animated.View
+        style={{
+          alignItems: 'center',
+          opacity: intro,
+          transform: [
+            { translateY: intro.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+            { scale: out.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) },
+          ],
+        }}
+      >
+        <PulseView>
+          <Image
+            source={require('./assets/splash-icon.png')}
+            style={{ width: 96, height: 96, marginBottom: 16 }}
+            resizeMode="contain"
+          />
+        </PulseView>
+        <Text
           style={[
-            styles.splashBadge,
-            {
-              backgroundColor: colors.primaryLight,
-              borderColor: colors.primary,
-            },
+            styles.splashTitle,
+            { color: colors.textDark },
+            fontsReady && { fontFamily: fonts.displayHeavy, fontWeight: 'normal' },
           ]}
         >
-          <Heart size={36} color={colors.primary} fill={colors.primary} />
-        </View>
-        <Text style={[styles.splashTitle, { color: colors.textDark }]}>Date Logger</Text>
-        <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 16 }} />
-      </View>
-    );
-  }
+          Date Logger
+        </Text>
+        <Text
+          style={[
+            styles.splashTagline,
+            { color: colors.textSubtle },
+            fontsReady && { fontFamily: fonts.displayItalic, fontStyle: 'normal' },
+          ]}
+        >
+          every little moment, kept
+        </Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
-  // Unauthenticated stack
-  if (!isAuthenticated) {
-    if (authScreen === 'register') {
-      return <RegisterScreen onNavigateLogin={() => setAuthScreen('login')} />;
+/** Login and register, sliding between each other. */
+function AuthFlow() {
+  const [authScreen, setAuthScreen] = useState('login');
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (authScreen === 'register') {
+          setAuthScreen('login');
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [authScreen])
+  );
+
+  return (
+    <ScreenTransition key={`auth-${authScreen}`} direction={authScreen === 'register' ? 1 : -1}>
+      {authScreen === 'register' ? (
+        <RegisterScreen onNavigateLogin={() => setAuthScreen('login')} />
+      ) : (
+        <LoginScreen onNavigateRegister={() => setAuthScreen('register')} />
+      )}
+    </ScreenTransition>
+  );
+}
+
+/** The four bottom tabs. Stays mounted underneath Details/Settings, so it keeps its place. */
+function MainTabs({ navigation, route }) {
+  const { colors } = useTheme();
+  const [nav, setNav] = useState({ tab: 'dashboard', direction: 0 });
+  const [initialVenueForLog, setInitialVenueForLog] = useState('');
+  const { version: journalVersion } = useContext(JournalContext);
+
+  const goToTab = useCallback((tab) => {
+    setNav((prev) => {
+      if (prev.tab === tab) return prev;
+      const diff = (TAB_ORDER[tab] ?? 0) - (TAB_ORDER[prev.tab] ?? 0);
+      return { tab, direction: Math.sign(diff) };
+    });
+  }, []);
+
+  // A reminder or link can ask for a specific tab.
+  const requestedTab = route.params?.tab;
+  useEffect(() => {
+    if (requestedTab && TAB_ORDER[requestedTab] !== undefined) {
+      goToTab(requestedTab);
+      navigation.setParams({ tab: undefined });
     }
-    return <LoginScreen onNavigateRegister={() => setAuthScreen('register')} />;
-  }
+  }, [requestedTab]);
 
-  // Handle converting a bucket list idea into a date log
-  const handleLogIdeaAsDate = (ideaTitle) => {
-    setInitialVenueForLog(ideaTitle);
-    setCurrentScreen('log');
+  // Android back: from any other tab go to the journal first, then let the OS exit.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (nav.tab !== 'dashboard') {
+          goToTab('dashboard');
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [nav.tab, goToTab])
+  );
+
+  const openDetails = (post) =>
+    navigation.navigate('Details', { postId: post._id, initialPost: post });
+  const openLog = () => {
+    setInitialVenueForLog('');
+    goToTab('log');
   };
 
-  // Render current active screen
-  const renderScreen = () => {
-    switch (currentScreen) {
-      case 'details':
-        return (
-          <DateDetailsScreen
-            postId={selectedPostId}
-            initialPost={selectedPost}
-            onNavigateBack={() => setCurrentScreen('history')}
-            onDeleteSuccess={() => setCurrentScreen('history')}
-          />
-        );
+  const renderTab = () => {
+    switch (nav.tab) {
       case 'log':
         return (
           <LogDateScreen
             initialVenue={initialVenueForLog}
             onNavigateBack={() => {
               setInitialVenueForLog('');
-              setCurrentScreen('dashboard');
+              goToTab('dashboard');
             }}
             onLogSaved={() => {
               setInitialVenueForLog('');
-              setCurrentScreen('history');
+              goToTab('history');
             }}
           />
         );
       case 'ideas':
         return (
           <DateIdeasScreen
-            onLogIdeaAsDate={handleLogIdeaAsDate}
+            onLogIdeaAsDate={(title) => {
+              setInitialVenueForLog(title);
+              goToTab('log');
+            }}
           />
         );
       case 'history':
         return (
           <HistoryScreen
-            onNavigateBack={() => setCurrentScreen('dashboard')}
-            onNavigateLog={() => {
-              setInitialVenueForLog('');
-              setCurrentScreen('log');
-            }}
-            onViewDetails={(post) => {
-              setSelectedPostId(post._id);
-              setSelectedPost(post);
-              setCurrentScreen('details');
-            }}
+            onNavigateBack={() => goToTab('dashboard')}
+            onNavigateLog={openLog}
+            onViewDetails={openDetails}
           />
         );
       case 'dashboard':
       default:
         return (
           <DashboardScreen
-            onNavigateLog={() => {
-              setInitialVenueForLog('');
-              setCurrentScreen('log');
-            }}
-            onNavigateHistory={() => setCurrentScreen('history')}
-            onNavigateIdeas={() => setCurrentScreen('ideas')}
-            onViewDetails={(post) => {
-              setSelectedPostId(post._id);
-              setSelectedPost(post);
-              setCurrentScreen('details');
-            }}
+            onNavigateLog={openLog}
+            onNavigateHistory={() => goToTab('history')}
+            onNavigateIdeas={() => goToTab('ideas')}
+            onNavigateSettings={() => navigation.navigate('Settings')}
+            onViewDetails={openDetails}
           />
         );
     }
   };
 
-  const showBottomNav = currentScreen !== 'details';
-
   return (
     <View style={[styles.mainWrapper, { backgroundColor: colors.bg }]}>
-      <View style={styles.contentArea}>{renderScreen()}</View>
-
-      {/* Persistent Bottom Navigation Bar */}
-      {showBottomNav && (
-        <BottomNavBar
-          currentScreen={currentScreen}
-          onSelectTab={(tab) => {
-            if (tab === 'log') {
-              setInitialVenueForLog('');
-            }
-            setCurrentScreen(tab);
-          }}
-        />
-      )}
+      <View style={styles.contentArea}>
+        {/* journalVersion changes when a partner is linked/unlinked, forcing a fresh load */}
+        <ScreenTransition key={`${nav.tab}-${journalVersion}`} direction={nav.direction}>
+          {renderTab()}
+        </ScreenTransition>
+      </View>
+      <BottomNavBar
+        currentScreen={nav.tab}
+        onSelectTab={(tab) => {
+          if (tab === 'log') setInitialVenueForLog('');
+          goToTab(tab);
+        }}
+      />
     </View>
   );
 }
 
-function ThemedAppContainer() {
+function DetailsRoute({ navigation, route }) {
+  const goBack = () =>
+    navigation.canGoBack() ? navigation.goBack() : navigation.dispatch(StackActions.replace('Main'));
+  return (
+    <DateDetailsScreen
+      postId={route.params?.postId}
+      initialPost={route.params?.initialPost || null}
+      onNavigateBack={goBack}
+      onDeleteSuccess={goBack}
+    />
+  );
+}
+
+function SettingsRoute({ navigation }) {
+  const { bump } = useContext(JournalContext);
+  return (
+    <SettingsScreen
+      onNavigateBack={() =>
+        navigation.canGoBack() ? navigation.goBack() : navigation.dispatch(StackActions.replace('Main'))
+      }
+      onJournalChanged={bump}
+    />
+  );
+}
+
+function MainApp({ fontsReady }) {
+  const { isAuthenticated, isInitializing } = useAuth();
+  const { colors, isDarkMode } = useTheme();
+  const [splashDone, setSplashDone] = useState(false);
+  const pendingReminder = useRef(null);
+  const [journalVersion, setJournalVersion] = useState(0);
+  const journal = useMemo(
+    () => ({ version: journalVersion, bump: () => setJournalVersion((v) => v + 1) }),
+    [journalVersion]
+  );
+
+  const ready = !isInitializing && fontsReady;
+
+  const navTheme = useMemo(
+    () => ({
+      ...DefaultTheme,
+      dark: isDarkMode,
+      colors: {
+        ...DefaultTheme.colors,
+        primary: colors.primary,
+        background: colors.bg,
+        card: colors.bg,
+        text: colors.textDark,
+        border: colors.borderSubtle,
+      },
+    }),
+    [colors, isDarkMode]
+  );
+
+  // Tapping a reminder opens the memory (or the bucket list) it is about.
+  const openReminder = useCallback((data) => {
+    if (!navigationRef.isReady()) {
+      pendingReminder.current = data;
+      return;
+    }
+    if (data?.postId) {
+      navigationRef.navigate('Details', { postId: data.postId });
+    } else if (data?.screen) {
+      navigationRef.dispatch(StackActions.popTo('Main', { tab: data.screen }));
+    }
+  }, []);
+
+  useEffect(() => onReminderOpened(openReminder), [openReminder]);
+
+  const handleNavReady = () => {
+    if (pendingReminder.current && isAuthenticated) {
+      const data = pendingReminder.current;
+      pendingReminder.current = null;
+      openReminder(data);
+    }
+  };
+
+  return (
+    <JournalContext.Provider value={journal}>
+    <View style={[styles.mainWrapper, { backgroundColor: colors.bg }]}>
+      {ready && (
+        <NavigationContainer
+          ref={navigationRef}
+          theme={navTheme}
+          linking={isAuthenticated ? linking : undefined}
+          onReady={handleNavReady}
+        >
+          <Stack.Navigator
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: colors.bg },
+            }}
+          >
+            {isAuthenticated ? (
+              <>
+                <Stack.Screen name="Main" component={MainTabs} />
+                <Stack.Screen name="Details" component={DetailsRoute} />
+                <Stack.Screen name="Settings" component={SettingsRoute} />
+              </>
+            ) : (
+              <Stack.Screen
+                name="Auth"
+                component={AuthFlow}
+                options={{ animationTypeForReplace: 'pop' }}
+              />
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      )}
+
+      {!splashDone && (
+        <AnimatedSplash
+          ready={ready}
+          fontsReady={fontsReady}
+          colors={colors}
+          onHidden={() => setSplashDone(true)}
+        />
+      )}
+    </View>
+    </JournalContext.Provider>
+  );
+}
+
+function ThemedAppContainer({ fontsReady }) {
   const { colors, isDarkMode } = useTheme();
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]} edges={['top', 'left', 'right']}>
-      <StatusBar
-        style={isDarkMode ? 'light' : 'dark'}
-        backgroundColor={colors.bg}
-      />
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       <AuthProvider>
-        <MainApp />
+        <MainApp fontsReady={fontsReady} />
       </AuthProvider>
     </SafeAreaView>
   );
 }
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    PlayfairDisplay_400Regular_Italic,
+    PlayfairDisplay_700Bold,
+    PlayfairDisplay_800ExtraBold,
+  });
+  // If fonts fail to load, carry on with the system font rather than blocking the app.
+  const fontsReady = fontsLoaded || !!fontError;
+
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedAppContainer />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <ThemedAppContainer fontsReady={fontsReady} />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -210,18 +447,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  splashBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    zIndex: 100,
   },
   splashTitle: {
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  splashTagline: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    marginTop: 6,
   },
 });

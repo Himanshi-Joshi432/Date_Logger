@@ -170,6 +170,11 @@ export function RegisterPage() {
               Sign in here
             </Link>
           </p>
+          <p style={{ marginTop: "8px", fontSize: "0.8rem" }}>
+            <Link to="/privacy" className="auth-link">
+              Privacy Policy
+            </Link>
+          </p>
         </div>
       </div>
     </div>

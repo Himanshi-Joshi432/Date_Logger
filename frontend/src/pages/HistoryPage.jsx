@@ -14,7 +14,6 @@ import {
   X,
   History as HistoryIcon,
   Music,
-  ExternalLink,
 } from "lucide-react";
 
 export function HistoryPage() {

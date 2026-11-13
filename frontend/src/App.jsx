@@ -9,6 +9,8 @@ import { LogDatePage } from './pages/LogDatePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { DateDetailsPage } from './pages/DateDetailsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { DeleteAccountPage } from './pages/DeleteAccountPage';
 import './App.css';
 
 function App() {
@@ -33,6 +35,10 @@ function App() {
               </PublicRoute>
             }
           />
+
+          {/* Public pages, reachable signed in or out (linked from the app stores) */}
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/delete-account" element={<DeleteAccountPage />} />
 
           {/* Protected Application Routes */}
           <Route

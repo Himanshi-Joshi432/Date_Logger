@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.singlehq.datelogger"
@@ -16,10 +16,7 @@
         "backgroundColor": "#ece3d4",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
-      "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -32,16 +29,47 @@
         "expo-image-picker",
         {
           "photosPermission": "The app needs access to your photos to attach memories to your date logs.",
-          "cameraPermission": "The app needs access to your camera to take photos for your date logs."
+          "cameraPermission": "The app needs access to your camera to take photos for your date logs.",
+          "microphonePermission": false
         }
       ],
-      "expo-audio",
-      "expo-asset"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#ece3d4",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#181412"
+          }
+        }
+      ],
+      "expo-image",
+      [
+        "expo-notifications",
+        {
+          "color": "#8d3d2f"
+        }
+      ]
     ],
     "extra": {
       "eas": {
         "projectId": "d6ac9c7c-457a-4c9e-8ca6-7dc4c08bf23a"
       }
-    }
+    },
+    "scheme": "datelogger"
   }
 }

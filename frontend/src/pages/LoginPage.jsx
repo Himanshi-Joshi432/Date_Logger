@@ -10,7 +10,7 @@ export function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login } = useAuth();
+  const { login, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -54,9 +54,9 @@ export function LoginPage() {
         </div>
 
         {/* Error Alert */}
-        {errorMsg && (
+        {(errorMsg || authError) && (
           <div className="alert-box alert-error" role="alert">
-            <span>{errorMsg}</span>
+            <span>{errorMsg || authError}</span>
           </div>
         )}
 
@@ -120,6 +120,11 @@ export function LoginPage() {
             Don't have an account yet?{" "}
             <Link to="/register" className="auth-link">
               Create an account
+            </Link>
+          </p>
+          <p style={{ marginTop: "8px", fontSize: "0.8rem" }}>
+            <Link to="/privacy" className="auth-link">
+              Privacy Policy
             </Link>
           </p>
         </div>
