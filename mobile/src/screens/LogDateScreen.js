@@ -14,28 +14,28 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../services/secureStorage';
 import {
-  MapPin,
+  Location,
   Calendar as CalendarIcon,
-  FileText,
-  X,
+  DocumentText,
   ArrowLeft,
-  Sparkles,
-  CheckCircle2,
-  AlertCircle,
+  MagicStar,
+  TickCircle,
+  InfoCircle,
   Camera,
-  Image as ImageIcon,
+  Gallery as ImageIcon,
   Music,
   Play,
   Pause,
   Heart,
-  Smile,
+  EmojiHappy,
   Tag,
-  Disc,
-  Plus,
-  RefreshCw,
-} from 'lucide-react-native';
+  Cd,
+  Add,
+  Refresh2,
+} from 'iconsax-react-native';
+import { CloseIcon } from '../components/CloseIcon';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptics } from '../utils/haptics';
@@ -100,7 +100,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
     async function restoreDraft() {
       if (initialVenue) return;
       try {
-        const stored = await AsyncStorage.getItem(DRAFT_STORAGE_KEY);
+        const stored = await secureStorage.getItem(DRAFT_STORAGE_KEY);
         if (stored) {
           const draft = JSON.parse(stored);
           if (draft.venue) setVenue(draft.venue);
@@ -142,7 +142,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
             imageFiles,
             date: selectedDate.toISOString(),
           };
-          await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+          await secureStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
         } catch (e) {}
       }
     }
@@ -152,7 +152,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
   const clearDraft = async () => {
     try {
-      await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+      await secureStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch (e) {}
   };
 
@@ -352,7 +352,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
       <FadeInView distance={30} style={styles.card}>
         <View style={styles.header}>
           <PulseView style={styles.sparkleBadge}>
-            <Sparkles size={24} color={colors.primary} />
+            <MagicStar size={24} color={colors.primary} />
           </PulseView>
           <Text style={styles.title}>Preserve a Date</Text>
           <Text style={styles.subtitle}>
@@ -363,7 +363,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         {/* Draft Restored Banner */}
         {draftRestored ? (
           <FadeInView from="scale" delay={200} style={styles.draftBox}>
-            <Sparkles size={14} color={colors.primary} />
+            <MagicStar size={14} color={colors.primary} />
             <Text style={styles.draftText}>Restored your unsaved draft</Text>
           </FadeInView>
         ) : null}
@@ -372,7 +372,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         {errorMsg ? (
           <ShakeView trigger={errorMsg}>
             <FadeInView key={errorMsg} from="scale" style={styles.errorBox}>
-              <AlertCircle size={16} color={colors.danger} />
+              <InfoCircle size={16} color={colors.danger} />
               <Text style={styles.errorText}>{errorMsg}</Text>
             </FadeInView>
           </ShakeView>
@@ -380,7 +380,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
         {successMsg ? (
           <FadeInView from="scale" style={styles.successBox}>
-            <CheckCircle2 size={16} color={colors.success} />
+            <TickCircle size={16} color={colors.success} />
             <Text style={styles.successText}>{successMsg}</Text>
           </FadeInView>
         ) : null}
@@ -388,7 +388,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         {/* 1. Venue Input */}
         <FadeInView delay={staggerDelay(1, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <MapPin size={16} color={colors.primary} />
+            <Location size={16} color={colors.primary} />
             <Text style={styles.label}>Venue / Place</Text>
             <Text style={styles.required}>*</Text>
           </View>
@@ -431,7 +431,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         {/* 3. Description / Journal Note */}
         <FadeInView delay={staggerDelay(3, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <FileText size={16} color={colors.primary} />
+            <DocumentText size={16} color={colors.primary} />
             <Text style={styles.label}>Journal Note</Text>
           </View>
           <TextInput
@@ -457,7 +457,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
 
         <FadeInView delay={staggerDelay(3, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Smile size={16} color={colors.primary} />
+            <EmojiHappy size={16} color={colors.primary} />
             <Text style={styles.label}>Mood</Text>
           </View>
           <ChipSelect options={MOOD_OPTIONS} value={mood} onChange={setMood} />
@@ -474,7 +474,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         {/* 4. MEMORY SOUNDTRACK (DEEZER 15s) WITH POP-UP WINDOW */}
         <FadeInView delay={staggerDelay(4, 80, 70)} style={styles.inputGroup}>
           <View style={styles.labelRow}>
-            <Disc size={16} color={colors.primary} />
+            <Cd size={16} color={colors.primary} />
             <Text style={styles.label}>Memory Soundtrack</Text>
           </View>
 
@@ -524,7 +524,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
                 }}
                 activeOpacity={0.7}
               >
-                <RefreshCw size={14} color={colors.primary} />
+                <Refresh2 size={14} color={colors.primary} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -532,7 +532,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
                 onPress={handleRemoveSong}
                 activeOpacity={0.7}
               >
-                <X size={16} color={colors.danger} />
+                <CloseIcon size={16} color={colors.danger} />
               </TouchableOpacity>
             </FadeInView>
           ) : (
@@ -546,7 +546,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
               scaleTo={0.97}
             >
               <View style={styles.openMusicIconCircle}>
-                <Disc size={20} color={colors.primary} />
+                <Cd size={20} color={colors.primary} />
               </View>
               <View style={styles.openMusicTextWrap}>
                 <Text style={styles.openMusicTitle}>Add a Soundtrack</Text>
@@ -554,7 +554,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
                   Search songs & attach a 15-second memory preview
                 </Text>
               </View>
-              <Plus size={18} color={colors.primary} />
+              <Add size={18} color={colors.primary} />
             </PressableScale>
           )}
         </FadeInView>
@@ -612,7 +612,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
                     scaleTo={0.8}
                     hitSlop={8}
                   >
-                    <X size={12} color="#ffffff" />
+                    <CloseIcon size={12} color="#ffffff" />
                   </PressableScale>
                 </FadeInView>
               ))}
@@ -672,7 +672,7 @@ export function LogDateScreen({ onNavigateBack, onLogSaved, initialVenue = '' })
         <View pointerEvents="none" style={styles.celebrateOverlay}>
           <FadeInView from="scale" style={styles.celebrateCard}>
             <PulseView style={styles.celebrateHeart} scale={1.15} period={1000}>
-              <CheckCircle2 size={38} color="#ffffff" strokeWidth={2.4} />
+              <TickCircle size={38} color="#ffffff" variant="Bold" />
             </PulseView>
             <Text style={styles.celebrateTitle}>Memory preserved</Text>
             <Text style={styles.celebrateSub}>Added to your journal ♡</Text>

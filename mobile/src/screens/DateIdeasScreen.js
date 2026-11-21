@@ -10,17 +10,16 @@ import {
   Alert,
   LayoutAnimation,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../services/secureStorage';
 import {
-  Lightbulb,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Circle,
+  LampOn,
+  Add,
+  Trash,
+  TickCircle,
   ArrowRight,
   Heart,
-  Sparkles,
-} from 'lucide-react-native';
+  MagicStar,
+} from 'iconsax-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ideasAPI } from '../services/api';
@@ -65,14 +64,14 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
   const applyIdeas = (next, { animate = true } = {}) => {
     if (animate) animateNextLayout();
     setIdeas(next);
-    AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+    secureStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
   };
 
   const loadIdeas = async () => {
     // 1. Show the offline copy straight away.
     let local = [];
     try {
-      const stored = await AsyncStorage.getItem(IDEAS_STORAGE_KEY);
+      const stored = await secureStorage.getItem(IDEAS_STORAGE_KEY);
       if (stored) local = JSON.parse(stored) || [];
       if (local.length > 0) setIdeas(local);
     } catch (e) {}
@@ -80,7 +79,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
     try {
       // 2. One-time move of ideas that only ever lived on this phone up to the account.
       const migratedKey = MIGRATED_KEY_PREFIX + (user?.id || 'me');
-      const alreadyMigrated = (await AsyncStorage.getItem(migratedKey)) === 'true';
+      const alreadyMigrated = (await secureStorage.getItem(migratedKey)) === 'true';
       if (!alreadyMigrated) {
         const toImport = local
           .filter((i) => i?.title && !isServerId(i.id) && !LEGACY_SAMPLE_TITLES.has(i.title))
@@ -88,7 +87,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
         if (toImport.length > 0) {
           await ideasAPI.importMany(toImport.reverse(), token);
         }
-        await AsyncStorage.setItem(migratedKey, 'true');
+        await secureStorage.setItem(migratedKey, 'true');
       }
 
       // 3. The server list (yours plus your partner's) is the source of truth.
@@ -121,7 +120,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
       const saved = fromServer(data.ideas[0]);
       setIdeas((current) => {
         const next = current.map((i) => (i.id === tempId ? saved : i));
-        AsyncStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+        secureStorage.setItem(IDEAS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
     } catch (err) {
@@ -182,7 +181,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
       {/* Top Header */}
       <FadeInView from="top" distance={10} style={styles.header}>
         <View style={styles.titleRow}>
-          <Sparkles size={20} color={colors.primary} />
+          <MagicStar size={20} color={colors.primary} />
           <Text style={styles.title}>Date Bucket List</Text>
         </View>
         <Text style={styles.subtitle}>
@@ -210,7 +209,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
           haptic={null}
           scaleTo={0.85}
         >
-          <Plus size={18} color="#ffffff" />
+          <Add size={18} color="#ffffff" />
         </PressableScale>
       </FadeInView>
 
@@ -247,7 +246,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
         ListEmptyComponent={
           <FadeInView style={styles.emptyWrap}>
             <PulseView>
-              <Lightbulb size={32} color={colors.primary} />
+              <LampOn size={32} color={colors.primary} />
             </PulseView>
             <Text style={styles.emptyTitle}>No ideas yet</Text>
             <Text style={styles.emptySub}>Add places you want to visit and things you want to try together!</Text>
@@ -267,9 +266,9 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
             >
               <FadeInView key={item.completed ? 'done' : 'todo'} from="scale">
                 {item.completed ? (
-                  <CheckCircle2 size={24} color={colors.success} />
+                  <TickCircle size={24} color={colors.success} variant="Bold" />
                 ) : (
-                  <Circle size={24} color={colors.borderActive} />
+                  <TickCircle size={24} color={colors.borderActive} />
                 )}
               </FadeInView>
             </PressableScale>
@@ -303,7 +302,7 @@ export function DateIdeasScreen({ onLogIdeaAsDate }) {
                 onPress={() => handleDelete(item.id, item.title)}
                 activeOpacity={0.7}
               >
-                <Trash2 size={15} color={colors.textMuted} />
+                <Trash size={15} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
           </FadeInView>

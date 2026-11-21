@@ -14,26 +14,26 @@ import {
   LayoutAnimation,
   useWindowDimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../services/secureStorage';
 import {
   Calendar,
-  Trash2,
-  Search,
-  Plus,
+  Trash,
+  SearchNormal1,
+  Add,
   ArrowLeft,
   ArrowRight,
-  X,
-  History as HistoryIcon,
+  Book1 as HistoryIcon,
   Play,
   Pause,
   Music,
-  Share2,
-  LayoutGrid,
-  List,
+  Share as ShareIcon,
+  Element3,
+  RowVertical,
   Heart,
   Tag,
-  Smile,
-} from 'lucide-react-native';
+  EmojiHappy,
+} from 'iconsax-react-native';
+import { CloseIcon } from '../components/CloseIcon';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptics } from '../utils/haptics';
@@ -66,7 +66,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
     useCallback(() => {
     async function loadCache() {
       try {
-        const cached = await AsyncStorage.getItem(CACHE_KEY_POSTS);
+        const cached = await secureStorage.getItem(CACHE_KEY_POSTS);
         if (cached) {
           setPosts(JSON.parse(cached));
           setIsLoading(false);
@@ -83,7 +83,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
       const data = await postAPI.getPosts(token);
       const fetched = data.posts || [];
       setPosts(fetched);
-      await AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(fetched));
+      await secureStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(fetched));
     } catch (err) {
       if (posts.length === 0) {
         Alert.alert('Error', err.message || 'Failed to load date history');
@@ -109,7 +109,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               setPosts((prev) => {
                 const updated = prev.filter((p) => p._id !== id);
-                AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(updated)).catch(() => {});
+                secureStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(updated)).catch(() => {});
                 return updated;
               });
               try {
@@ -252,7 +252,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
 
               {item.rating ? (
                 <View style={styles.ratingTag}>
-                  <Heart size={10} color={colors.primary} fill={colors.primary} />
+                  <Heart size={10} color={colors.primary} variant="Bold" />
                   <Text style={styles.ratingTagText}>{item.rating}★</Text>
                 </View>
               ) : null}
@@ -297,7 +297,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               style={styles.actionIconBtn}
               onPress={() => handleShare(item)}
             >
-              <Share2 size={14} color={colors.textDark} />
+              <ShareIcon size={14} color={colors.textDark} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -308,7 +308,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               {deletingId === item._id ? (
                 <ActivityIndicator size="small" color={colors.danger} />
               ) : (
-                <Trash2 size={14} color={colors.danger} />
+                <Trash size={14} color={colors.danger} />
               )}
             </TouchableOpacity>
           </View>
@@ -389,9 +389,9 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
           >
             <FadeInView key={viewMode} from="scale">
               {viewMode === 'list' ? (
-                <LayoutGrid size={16} color={colors.textDark} />
+                <Element3 size={16} color={colors.textDark} />
               ) : (
-                <List size={16} color={colors.textDark} />
+                <RowVertical size={16} color={colors.textDark} />
               )}
             </FadeInView>
           </TouchableOpacity>
@@ -401,14 +401,14 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
             onPress={onNavigateLog}
             activeOpacity={0.7}
           >
-            <Plus size={18} color="#ffffff" />
+            <Add size={18} color="#ffffff" />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Search Bar */}
       <View style={styles.searchBar}>
-        <Search size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
+        <SearchNormal1 size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search venues, notes, or vibes..."
@@ -418,7 +418,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
         />
         {searchTerm ? (
           <TouchableOpacity onPress={() => setSearchTerm('')}>
-            <X size={16} color={colors.textSubtle} />
+            <CloseIcon size={16} color={colors.textSubtle} />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -484,7 +484,7 @@ export function HistoryScreen({ onNavigateBack, onNavigateLog, onViewDetails }) 
               : 'Start documenting your favorite moments together in this journal!'}
           </Text>
           <PressableScale style={styles.emptyBtn} onPress={onNavigateLog} haptic="press">
-            <Plus size={18} color="#ffffff" style={{ marginRight: 6 }} />
+            <Add size={18} color="#ffffff" style={{ marginRight: 6 }} />
             <Text style={styles.emptyBtnText}>Log Your First Date</Text>
           </PressableScale>
         </FadeInView>

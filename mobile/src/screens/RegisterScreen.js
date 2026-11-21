@@ -11,7 +11,14 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { Heart, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
+import {
+  Sms,
+  Lock,
+  Eye,
+  EyeSlash,
+  ArrowRight,
+} from 'iconsax-react-native';
+
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -54,12 +61,15 @@ export function RegisterScreen({ onNavigateLogin }) {
     setIsSubmitting(true);
 
     try {
-      await register(email.trim(), password);
+      const result = await register(email.trim(), password);
       haptics.success();
-      setSuccessMsg('Account created successfully! You can now sign in.');
-      setTimeout(() => {
-        onNavigateLogin();
-      }, 1500);
+      // When sign-in succeeded the app moves on to the partner walkthrough by itself.
+      if (!result?.signedIn) {
+        setSuccessMsg('Account created successfully! You can now sign in.');
+        setTimeout(() => {
+          onNavigateLogin();
+        }, 1500);
+      }
     } catch (err) {
       haptics.error();
       setErrorMsg(err.message || 'Registration failed. Please try again.');
@@ -119,7 +129,7 @@ export function RegisterScreen({ onNavigateLogin }) {
           <View style={styles.fieldGroup}>
             <Text style={styles.label}>Email Address</Text>
             <View style={styles.inputRow}>
-              <Mail size={18} color={colors.textSubtle} style={styles.inputIcon} />
+              <Sms size={18} color={colors.textSubtle} style={styles.inputIcon} />
               <TextInput
                 style={styles.textInput}
                 placeholder="you@example.com"
@@ -151,7 +161,7 @@ export function RegisterScreen({ onNavigateLogin }) {
                 style={styles.eyeBtn}
               >
                 {showPassword ? (
-                  <EyeOff size={18} color={colors.textSubtle} />
+                  <EyeSlash size={18} color={colors.textSubtle} />
                 ) : (
                   <Eye size={18} color={colors.textSubtle} />
                 )}

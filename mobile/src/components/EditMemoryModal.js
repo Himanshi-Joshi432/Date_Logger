@@ -16,7 +16,15 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Calendar, Music, Disc, Plus, X, RefreshCw, ImagePlus } from 'lucide-react-native';
+import {
+  Calendar,
+  Music,
+  Cd,
+  Add,
+  Refresh2,
+  GalleryAdd,
+} from 'iconsax-react-native';
+import { CloseIcon } from './CloseIcon';
 import { useTheme } from '../context/ThemeContext';
 import { postAPI } from '../services/api';
 import { toSavedMusic } from '../services/musicService';
@@ -195,7 +203,7 @@ export function EditMemoryModal({ visible, post, token, onClose, onSaved }) {
           <View style={styles.header}>
             <Text style={styles.title}>Edit Date Memory</Text>
             <PressableScale onPress={close} style={styles.closeBtn} accessibilityLabel="Close">
-              <X size={20} color={colors.textDark} />
+              <CloseIcon size={20} color={colors.textDark} />
             </PressableScale>
           </View>
 
@@ -258,7 +266,7 @@ export function EditMemoryModal({ visible, post, token, onClose, onSaved }) {
                       hitSlop={8}
                       accessibilityLabel="Remove photo"
                     >
-                      <X size={12} color="#ffffff" />
+                      <CloseIcon size={12} color="#ffffff" />
                     </PressableScale>
                   </View>
                 ))}
@@ -275,7 +283,7 @@ export function EditMemoryModal({ visible, post, token, onClose, onSaved }) {
                       hitSlop={8}
                       accessibilityLabel="Remove photo"
                     >
-                      <X size={12} color="#ffffff" />
+                      <CloseIcon size={12} color="#ffffff" />
                     </PressableScale>
                   </FadeInView>
                 ))}
@@ -290,7 +298,7 @@ export function EditMemoryModal({ visible, post, token, onClose, onSaved }) {
                     {isPreparingPhotos ? (
                       <ActivityIndicator size="small" color={colors.primary} />
                     ) : (
-                      <ImagePlus size={22} color={colors.primary} />
+                      <GalleryAdd size={22} color={colors.primary} />
                     )}
                   </PressableScale>
                 )}
@@ -324,26 +332,26 @@ export function EditMemoryModal({ visible, post, token, onClose, onSaved }) {
                     onPress={() => setMusicModalVisible(true)}
                     accessibilityLabel="Change song"
                   >
-                    <RefreshCw size={14} color={colors.primary} />
+                    <Refresh2 size={14} color={colors.primary} />
                   </PressableScale>
                   <PressableScale
                     style={styles.songIconBtn}
                     onPress={() => setSong(null)}
                     accessibilityLabel="Remove song"
                   >
-                    <X size={16} color={colors.danger} />
+                    <CloseIcon size={16} color={colors.danger} />
                   </PressableScale>
                 </View>
               ) : (
                 <PressableScale style={styles.addSongBtn} onPress={() => setMusicModalVisible(true)}>
                   <View style={styles.addSongIcon}>
-                    <Disc size={18} color={colors.primary} />
+                    <Cd size={18} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.songTitle}>Add a Soundtrack</Text>
                     <Text style={styles.songArtist}>Search and attach 15 seconds of music</Text>
                   </View>
-                  <Plus size={16} color={colors.primary} />
+                  <Add size={16} color={colors.primary} />
                 </PressableScale>
               )}
             </FadeInView>

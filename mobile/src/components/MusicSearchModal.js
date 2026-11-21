@@ -11,7 +11,15 @@ import {
   Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Disc, Music, Play, Pause, Search, Check, X } from 'lucide-react-native';
+import {
+  Cd,
+  Music,
+  Play,
+  Pause,
+  SearchNormal1,
+  TickCircle,
+} from 'iconsax-react-native';
+import { CloseIcon } from './CloseIcon';
 import { useTheme } from '../context/ThemeContext';
 import { searchDeezerTracks, POPULAR_DATE_SONGS } from '../services/musicService';
 import { useAudioPreview } from '../hooks/useAudioPreview';
@@ -81,7 +89,7 @@ export function MusicSearchModal({ visible, onClose, onSelect }) {
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.headerBadge}>
-                <Disc size={20} color={colors.primary} />
+                <Cd size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.title}>Choose Soundtrack</Text>
@@ -89,13 +97,13 @@ export function MusicSearchModal({ visible, onClose, onSelect }) {
               </View>
             </View>
             <PressableScale style={styles.closeBtn} onPress={close} accessibilityLabel="Close">
-              <X size={20} color={colors.textDark} />
+              <CloseIcon size={20} color={colors.textDark} />
             </PressableScale>
           </View>
 
           {/* Search bar stays pinned above the keyboard */}
           <View style={styles.searchBar}>
-            <Search size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
+            <SearchNormal1 size={16} color={colors.textSubtle} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search song or artist..."
@@ -108,7 +116,7 @@ export function MusicSearchModal({ visible, onClose, onSelect }) {
             />
             {query ? (
               <PressableScale onPress={() => setQuery('')} style={{ padding: 4 }} haptic={null}>
-                <X size={15} color={colors.textSubtle} />
+                <CloseIcon size={15} color={colors.textSubtle} />
               </PressableScale>
             ) : null}
             <PressableScale style={styles.searchBtn} onPress={() => search()}>
@@ -195,7 +203,7 @@ export function MusicSearchModal({ visible, onClose, onSelect }) {
                       </PressableScale>
 
                       <PressableScale style={styles.addBtn} onPress={() => choose(track)} haptic={null}>
-                        <Check size={13} color="#ffffff" />
+                        <TickCircle size={13} color="#ffffff" />
                         <Text style={styles.addBtnText}>Add</Text>
                       </PressableScale>
                     </FadeInView>
@@ -210,7 +218,7 @@ export function MusicSearchModal({ visible, onClose, onSelect }) {
               ) : (
                 <View style={styles.centerBox}>
                   <PulseView>
-                    <Disc size={36} color={colors.borderActive} />
+                    <Cd size={36} color={colors.borderActive} />
                   </PulseView>
                   <Text style={styles.emptyTitle}>Find your soundtrack</Text>
                   <Text style={styles.centerText}>

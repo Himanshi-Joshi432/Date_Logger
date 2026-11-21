@@ -63,7 +63,8 @@
         {
           "color": "#8d3d2f"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

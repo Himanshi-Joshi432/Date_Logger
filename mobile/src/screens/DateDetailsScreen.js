@@ -14,27 +14,27 @@ import {
   Share,
 } from 'react-native';
 import { createAudioPlayer } from 'expo-audio';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../services/secureStorage';
 import {
   Calendar,
-  MapPin,
-  Trash2,
+  Location,
+  Trash,
   ArrowLeft,
   Music,
   Play,
   Pause,
-  RotateCcw,
-  FileText,
-  Sparkles,
-  Share2,
-  Edit3,
-  X,
+  RotateLeft,
+  DocumentText,
+  MagicStar,
+  Share as ShareIcon,
+  Edit2,
   Heart,
   Tag,
-  Smile,
-  Maximize2,
-  Disc,
-} from 'lucide-react-native';
+  EmojiHappy,
+  Maximize4,
+  Cd,
+} from 'iconsax-react-native';
+import { CloseIcon } from '../components/CloseIcon';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { haptics } from '../utils/haptics';
@@ -49,9 +49,9 @@ const CACHE_KEY_POSTS = 'date_logger_cached_posts';
 /** Applies a change to the cached post list so History/Dashboard don't show stale data. */
 async function updateCachedPosts(transform) {
   try {
-    const cached = await AsyncStorage.getItem(CACHE_KEY_POSTS);
+    const cached = await secureStorage.getItem(CACHE_KEY_POSTS);
     if (!cached) return;
-    await AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(transform(JSON.parse(cached))));
+    await secureStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(transform(JSON.parse(cached))));
   } catch (e) {}
 }
 
@@ -374,7 +374,7 @@ export function DateDetailsScreen({
             onPress={handleShare}
             activeOpacity={0.7}
           >
-            <Share2 size={16} color={colors.textDark} />
+            <ShareIcon size={16} color={colors.textDark} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -382,7 +382,7 @@ export function DateDetailsScreen({
             onPress={openEditModal}
             activeOpacity={0.7}
           >
-            <Edit3 size={16} color={colors.textDark} />
+            <Edit2 size={16} color={colors.textDark} />
           </TouchableOpacity>
 
           {canDelete ? (
@@ -395,7 +395,7 @@ export function DateDetailsScreen({
             {isDeleting ? (
               <ActivityIndicator size="small" color={colors.danger} />
             ) : (
-              <Trash2 size={16} color={colors.danger} />
+              <Trash size={16} color={colors.danger} />
             )}
           </TouchableOpacity>
           ) : null}
@@ -437,7 +437,7 @@ export function DateDetailsScreen({
                         transition={250}
                       />
                       <View style={styles.zoomHintPill}>
-                        <Maximize2 size={12} color="#ffffff" />
+                        <Maximize4 size={12} color="#ffffff" />
                         <Text style={styles.zoomHintText}>Tap to zoom</Text>
                       </View>
                     </TouchableOpacity>
@@ -471,7 +471,7 @@ export function DateDetailsScreen({
               </View>
             ) : (
               <View style={styles.noPhotoWrap}>
-                <Sparkles size={24} color={colors.primary} />
+                <MagicStar size={24} color={colors.primary} />
                 <Text style={styles.noPhotoText}>No photo attached</Text>
               </View>
             )}
@@ -479,7 +479,7 @@ export function DateDetailsScreen({
 
           {/* 2. TITLE (VENUE) */}
           <FadeInView delay={140} style={styles.titleSection}>
-            <MapPin size={22} color={colors.primary} style={{ marginTop: 4 }} />
+            <Location size={22} color={colors.primary} style={{ marginTop: 4 }} />
             <Text style={styles.venueTitle}>{post.venue || 'Unnamed Venue'}</Text>
           </FadeInView>
 
@@ -499,7 +499,7 @@ export function DateDetailsScreen({
 
             {post.mood ? (
               <View style={styles.moodBadge}>
-                <Smile size={12} color={colors.primary} />
+                <EmojiHappy size={12} color={colors.primary} />
                 <Text style={styles.moodBadgeText}>{post.mood}</Text>
               </View>
             ) : null}
@@ -513,7 +513,7 @@ export function DateDetailsScreen({
                   <Heart
                     size={18}
                     color={colors.primary}
-                    fill={star <= post.rating ? colors.primary : 'transparent'}
+                    variant={star <= post.rating ? 'Bold' : 'Linear'}
                   />
                 </FadeInView>
               ))}
@@ -524,7 +524,7 @@ export function DateDetailsScreen({
           {/* 4. DESCRIPTION */}
           <FadeInView delay={270} style={styles.descriptionSection}>
             <View style={styles.descHeader}>
-              <FileText size={15} color={colors.primary} />
+              <DocumentText size={15} color={colors.primary} />
               <Text style={styles.descHeaderText}>Journal Notes & Memories</Text>
             </View>
             <View style={styles.notesBox}>
@@ -547,7 +547,7 @@ export function DateDetailsScreen({
                   </PulseView>
                 ) : (
                   <View style={styles.soundtrackCoverPlaceholder}>
-                    <Disc size={22} color={colors.primary} />
+                    <Cd size={22} color={colors.primary} />
                   </View>
                 )}
 
@@ -607,7 +607,7 @@ export function DateDetailsScreen({
           {/* Footer & Share CTA */}
           <FadeInView delay={380} style={styles.footerSection}>
             <PressableScale style={styles.shareMemoryBtn} onPress={handleShare} haptic={null}>
-              <Share2 size={14} color={colors.primary} />
+              <ShareIcon size={14} color={colors.primary} />
               <Text style={styles.shareMemoryBtnText}>Share Date Recap ♡</Text>
             </PressableScale>
             <Text style={styles.authorText}>
@@ -633,7 +633,7 @@ export function DateDetailsScreen({
               style={styles.lightboxCloseBtn}
               onPress={() => setLightboxVisible(false)}
             >
-              <X size={24} color="#ffffff" />
+              <CloseIcon size={24} color="#ffffff" />
             </PressableScale>
           </View>
 

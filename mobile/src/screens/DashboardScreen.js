@@ -3,17 +3,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-  PlusCircle,
-  History,
+  AddCircle,
+  Book1,
   ArrowRight,
-  Settings,
+  Setting2,
   Moon,
-  Sun,
-  Sparkles,
+  Sun1,
+  MagicStar,
   Clock,
-  Compass,
-} from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+  Discover,
+} from 'iconsax-react-native';
+import { secureStorage } from '../services/secureStorage';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { postAPI } from '../services/api';
@@ -58,7 +58,7 @@ export function DashboardScreen({
     async function loadStats() {
       try {
         // Try local cache first for instant load
-        const cached = await AsyncStorage.getItem(CACHE_KEY_POSTS);
+        const cached = await secureStorage.getItem(CACHE_KEY_POSTS);
         if (cached && isActive) {
           analyzePosts(JSON.parse(cached));
         }
@@ -67,7 +67,7 @@ export function DashboardScreen({
         if (token) {
           const res = await postAPI.getPosts(token);
           if (res?.posts) {
-            await AsyncStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(res.posts));
+            await secureStorage.setItem(CACHE_KEY_POSTS, JSON.stringify(res.posts));
             if (isActive) analyzePosts(res.posts);
             // Keep "On this day" reminders in step with the latest memories.
             syncReminders(res.posts);
@@ -151,7 +151,7 @@ export function DashboardScreen({
           >
             <FadeInView key={isDarkMode ? 'sun' : 'moon'} from="scale">
               {isDarkMode ? (
-                <Sun size={16} color={colors.textDark} />
+                <Sun1 size={16} color={colors.textDark} />
               ) : (
                 <Moon size={16} color={colors.textDark} />
               )}
@@ -164,7 +164,7 @@ export function DashboardScreen({
             scaleTo={0.85}
             accessibilityLabel="Settings"
           >
-            <Settings size={17} color={colors.textDark} />
+            <Setting2 size={17} color={colors.textDark} />
           </PressableScale>
         </View>
       </FadeInView>
@@ -214,7 +214,7 @@ export function DashboardScreen({
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBlock}>
-              <Sparkles size={20} color={colors.primary} />
+              <MagicStar size={20} color={colors.primary} />
               <Text style={styles.statLabel}>
                 {latestMemory?.date
                   ? `latest · ${new Date(latestMemory.date).toLocaleDateString(undefined, {
@@ -270,7 +270,7 @@ export function DashboardScreen({
               >
                 <View style={styles.actionLeft}>
                   <View style={styles.primaryIconCircle}>
-                    <PlusCircle size={30} color="#ffffff" strokeWidth={2.4} />
+                    <AddCircle size={30} color="#ffffff" variant="Bulk" />
                   </View>
                   <View style={styles.actionTextWrap}>
                     <Text style={styles.primaryActionTitle}>Log a Date</Text>
@@ -280,7 +280,7 @@ export function DashboardScreen({
                   </View>
                 </View>
                 <View style={styles.arrowCircle}>
-                  <ArrowRight size={20} color="#ffffff" strokeWidth={2.4} />
+                  <ArrowRight size={20} color="#ffffff" />
                 </View>
               </LinearGradient>
             </PressableScale>
@@ -290,7 +290,7 @@ export function DashboardScreen({
             <PressableScale style={styles.secondaryActionCard} onPress={onNavigateHistory}>
               <View style={styles.actionLeft}>
                 <View style={styles.secondaryIconCircle}>
-                  <History size={26} color={colors.primary} strokeWidth={2.4} />
+                  <Book1 size={26} color={colors.primary} variant="Bulk" />
                 </View>
                 <View style={styles.actionTextWrap}>
                   <Text style={styles.secondaryActionTitle}>Date Memories</Text>
@@ -300,7 +300,7 @@ export function DashboardScreen({
                 </View>
               </View>
               <View style={styles.secondaryArrowCircle}>
-                <ArrowRight size={20} color={colors.primary} strokeWidth={2.4} />
+                <ArrowRight size={20} color={colors.primary} />
               </View>
             </PressableScale>
           </FadeInView>
@@ -309,7 +309,7 @@ export function DashboardScreen({
             <PressableScale style={styles.ideasActionCard} onPress={onNavigateIdeas}>
               <View style={styles.actionLeft}>
                 <View style={styles.ideasIconCircle}>
-                  <Compass size={24} color={colors.primary} strokeWidth={2.2} />
+                  <Discover size={24} color={colors.primary} variant="Bulk" />
                 </View>
                 <View style={styles.actionTextWrap}>
                   <Text style={styles.ideasActionTitle}>Couple Bucket List</Text>
@@ -319,7 +319,7 @@ export function DashboardScreen({
                 </View>
               </View>
               <View style={styles.ideasArrowCircle}>
-                <ArrowRight size={18} color={colors.primary} strokeWidth={2.2} />
+                <ArrowRight size={18} color={colors.primary} />
               </View>
             </PressableScale>
           </FadeInView>

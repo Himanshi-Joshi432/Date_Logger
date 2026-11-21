@@ -27,6 +27,7 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { DateDetailsScreen } from './src/screens/DateDetailsScreen';
 import { DateIdeasScreen } from './src/screens/DateIdeasScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { PartnerWalkthroughScreen } from './src/screens/PartnerWalkthroughScreen';
 import { BottomNavBar } from './src/components/BottomNavBar';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { PulseView, ScreenTransition } from './src/components/motion';
@@ -301,8 +302,15 @@ function SettingsRoute({ navigation }) {
   );
 }
 
+/** Partner-linking walkthrough shown once after sign-up, before the journal. */
+function WelcomeRoute() {
+  const { bump } = useContext(JournalContext);
+  const { finishPartnerWalkthrough } = useAuth();
+  return <PartnerWalkthroughScreen onFinish={finishPartnerWalkthrough} onJournalChanged={bump} />;
+}
+
 function MainApp({ fontsReady }) {
-  const { isAuthenticated, isInitializing } = useAuth();
+  const { isAuthenticated, isInitializing, needsPartnerWalkthrough } = useAuth();
   const { colors, isDarkMode } = useTheme();
   const [splashDone, setSplashDone] = useState(false);
   const pendingReminder = useRef(null);
@@ -372,6 +380,14 @@ function MainApp({ fontsReady }) {
           >
             {isAuthenticated ? (
               <>
+                {/* Listed first so it opens on top; removing it reveals the journal. */}
+                {needsPartnerWalkthrough && (
+                  <Stack.Screen
+                    name="Welcome"
+                    component={WelcomeRoute}
+                    options={{ gestureEnabled: false, animation: 'fade' }}
+                  />
+                )}
                 <Stack.Screen name="Main" component={MainTabs} />
                 <Stack.Screen name="Details" component={DetailsRoute} />
                 <Stack.Screen name="Settings" component={SettingsRoute} />

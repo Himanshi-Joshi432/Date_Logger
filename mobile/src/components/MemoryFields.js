@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { Heart } from 'lucide-react-native';
+import {
+  Heart,
+} from 'iconsax-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { FadeInView, PressableScale } from './motion';
 
@@ -29,8 +31,7 @@ export function HeartRating({ value, onChange, size = 30 }) {
               <Heart
                 size={size}
                 color={filled ? colors.primary : colors.borderActive}
-                fill={filled ? colors.primary : 'transparent'}
-                strokeWidth={1.8}
+                variant={filled ? 'Bold' : 'Linear'}
               />
             </FadeInView>
           </PressableScale>

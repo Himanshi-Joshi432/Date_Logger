@@ -1,17 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Home, BookHeart, Plus, Sparkles } from 'lucide-react-native';
+import {
+  Home2,
+  Book1,
+  Add,
+  MagicStar,
+} from 'iconsax-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { haptics } from '../utils/haptics';
 import { gradients, shadow } from '../theme/tokens';
 import { PressableScale } from './motion';
 
 const TABS = [
-  { key: 'dashboard', label: 'Journal', icon: Home },
-  { key: 'history', label: 'Memories', icon: BookHeart },
-  { key: 'log', label: 'Log Date', icon: Plus, isAction: true },
-  { key: 'ideas', label: 'Bucket List', icon: Sparkles },
+  { key: 'dashboard', label: 'Journal', icon: Home2 },
+  { key: 'history', label: 'Memories', icon: Book1 },
+  { key: 'log', label: 'Log Date', icon: Add, isAction: true },
+  { key: 'ideas', label: 'Bucket List', icon: MagicStar },
 ];
 
 function TabItem({ tab, isActive, onPress, colors, styles }) {
@@ -48,7 +53,7 @@ function TabItem({ tab, isActive, onPress, colors, styles }) {
           <Icon
             size={20}
             color={isActive ? colors.primary : colors.textSubtle}
-            strokeWidth={isActive ? 2.4 : 1.8}
+            variant={isActive ? 'Bold' : 'Linear'}
           />
         </Animated.View>
       </View>
@@ -90,7 +95,7 @@ function ActionTab({ tab, isActive, onPress, colors, styles }) {
           style={styles.actionBtn}
         >
           <Animated.View style={{ transform: [{ rotate }] }}>
-            <Icon size={26} color="#ffffff" strokeWidth={2.6} />
+            <Icon size={26} color="#ffffff" />
           </Animated.View>
         </LinearGradient>
       </PressableScale>
